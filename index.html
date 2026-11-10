@@ -62,6 +62,14 @@ dialog::backdrop{background:#0008}
 .chk{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px}
 .chk label.c{display:inline-flex;align-items:center;gap:6px;margin:0;color:var(--ink);font-size:14px}
 .chk input{width:auto;margin:0}
+.grp-h{margin:20px 0 10px;font-size:14px;color:var(--mute);font-weight:500}
+.grp-h:first-child{margin-top:4px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.tile{display:flex;flex-direction:column;align-items:flex-start;gap:14px;min-height:98px;padding:16px;text-align:right;border-radius:10px}
+.tile:hover{border-color:var(--accent);box-shadow:0 6px 18px -12px var(--accent)}
+.tile .tn{font-size:18px;font-weight:600}
+.tile .tc{margin-top:auto;font-size:13px;color:var(--accent)}
+#rback{margin-bottom:10px;padding-inline-start:0}
 .hint{font-size:12px;color:var(--mute);margin:-6px 0 12px}
 </style>
 </head>
@@ -131,7 +139,7 @@ const HEAD = { scope: 'النطاق', name: 'الاسم', role: 'الدور', br
   source: 'المصدر', date: 'التاريخ', time: 'الوقت', patient: 'المريض', procedure: 'الإجراء' };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-let session = null, tab = null, D = {}, editing = null;
+let session = null, tab = null, D = {}, editing = null, roomBranch = null;
 
 async function api(body) {
   const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
@@ -156,7 +164,7 @@ function start() {
   const tabs = Object.keys(SCHEMA).filter(k => can(SCHEMA[k].perm) || ['Branches', 'Rooms', 'Schedules', 'Procedures'].includes(k));
   $('nav').innerHTML = '<span class="brand"><img src="logo.png" alt=""><span class="bn"><b>dental</b><i>العيادات</i></span></span>' + tabs.map(k => `<button data-t="${k}">${SCHEMA[k].label}</button>`).join('') +
     `<span class="grow"></span><span style="color:var(--mute)">${esc(session.user.username)}${session.user.all ? '' : ' (' + esc(session.user.branch) + ')'}</span>${can('*') ? '<button id="seed">بيانات تجريبية</button><button id="unseed">مسح التجريبي</button>' : ''}<button id="out">خروج</button>`;
-  $('nav').onclick = e => { if (e.target.dataset.t) show(e.target.dataset.t); if (e.target.id === 'seed') demo('seedDemo'); if (e.target.id === 'unseed') demo('clearDemo'); if (e.target.id === 'out') { sessionStorage.clear(); location.reload(); } };
+  $('nav').onclick = e => { if (e.target.dataset.t) { roomBranch = null; show(e.target.dataset.t); } if (e.target.id === 'seed') demo('seedDemo'); if (e.target.id === 'unseed') demo('clearDemo'); if (e.target.id === 'out') { sessionStorage.clear(); location.reload(); } };
   show(tabs[0]);
 }
 
@@ -166,6 +174,8 @@ async function show(t) {
   tab = t; const S = { ...SCHEMA[t] }; $('q').value = '';
   S.cols = S.cols.filter(c => { const f = SCHEMA[t].f.find(x => x[0] === c); return !(f && f[3] && !can('costs')); });
   document.querySelectorAll('nav button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  $('add').textContent = 'إضافة'; $('q').style.display = ''; $('tbl').className = 'wrap';
+  if (t === 'Rooms') return showRooms();
   $('title').textContent = S.label; $('add').style.display = can(S.perm) ? '' : 'none';
   $('tbl').innerHTML = '<div class="empty">جاري التحميل…</div>';
   try {
@@ -178,11 +188,36 @@ async function show(t) {
   } catch (e) { $('tbl').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
+const plural = n => n === 0 ? 'مفيش غرف' : n === 1 ? 'غرفة واحدة' : n === 2 ? 'غرفتين' : n + (n <= 10 ? ' غرف' : ' غرفة');
+
+// تبويب الغرف: مربعات للفروع، ولما تدوس على فرع تفتح صفحة غرفه
+async function showRooms() {
+  $('tbl').className = ''; $('q').style.display = 'none';
+  $('tbl').innerHTML = '<div class="empty">جاري التحميل…</div>';
+  try {
+    const [bs, rs] = await Promise.all([load('Branches'), load('Rooms')]);
+    if (!roomBranch) {
+      $('title').textContent = 'الغرف'; $('add').style.display = 'none';
+      const mine = bs.filter(b => session.user.all || !session.user.branch || b.name === session.user.branch), groups = {};
+      mine.forEach(b => (groups[b.address || 'الفروع'] = groups[b.address || 'الفروع'] || []).push(b));
+      $('tbl').innerHTML = Object.keys(groups).map(g => `<div class="grp-h">${esc(g)}</div><div class="tiles">` +
+        groups[g].map(b => `<button class="tile" data-b="${esc(b.name)}"><span class="tn">${esc(b.name)}</span><span class="tc">${plural(rs.filter(r => r.branch === b.name).length)}</span></button>`).join('') +
+        '</div>').join('') || '<div class="empty">مفيش فروع لسه. ضيف فروعك من تبويب "الفروع".</div>';
+    } else {
+      const mine = rs.filter(r => r.branch === roomBranch);
+      $('title').textContent = 'غرف فرع ' + roomBranch; $('add').textContent = 'إضافة غرفة'; $('add').style.display = can('branches') ? '' : 'none';
+      $('tbl').innerHTML = '<button class="link" id="rback">رجوع لكل الفروع</button><div class="wrap">' + (mine.length
+        ? '<table><thead><tr><th>الغرفة</th><th></th></tr></thead><tbody>' + mine.map(r => `<tr><td>${esc(r.name)}</td><td>${can('branches') ? `<button class="link" data-e="${esc(r.id)}">تعديل</button><button class="link del" data-d="${esc(r.id)}">حذف</button>` : ''}</td></tr>`).join('') + '</tbody></table>'
+        : `<div class="empty">مفيش غرف في فرع ${esc(roomBranch)} لسه. دوس "إضافة غرفة" لتبدأ.</div>`) + '</div>';
+    }
+  } catch (e) { $('tbl').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
 async function openForm(row) {
   const S = SCHEMA[tab]; editing = row || {};
   const need = { doc: 'Employees', rm: 'Rooms', pt: 'Patients' };
   for (const [, , ty] of S.f) { const t = /^(sel|multi):/.test(ty) ? ty.split(':')[1] : need[ty]; if (t && !D[t]) await load(t); }
-  $('dt').textContent = (row ? 'تعديل ' : 'إضافة ') + S.label; $('ferr').textContent = '';
+  $('dt').textContent = (row && row.id ? 'تعديل ' : 'إضافة ') + ({ Employees: 'موظف', Roles: 'دور', Branches: 'فرع', Rooms: 'غرفة', Procedures: 'إجراء', Schedules: 'جدول دكتور', Patients: 'مريض', Appointments: 'ميعاد' }[tab] || S.label); $('ferr').textContent = '';
   $('fields').innerHTML = S.f.filter(f => !(f[3] && !can('costs'))).map(([k, l, ty]) => {
     const v = esc(editing[k]);
     let inp;
@@ -221,11 +256,14 @@ async function demo(a) {
 }
 $('lbtn').onclick = login;
 $('p').onkeydown = e => { if (e.key === 'Enter') login(); };
-$('add').onclick = () => openForm(null);
+$('add').onclick = () => openForm(tab === 'Rooms' && roomBranch ? { branch: roomBranch } : null);
 $('q').oninput = () => document.querySelectorAll('#tbl tbody tr').forEach(tr => { tr.style.display = tr.textContent.includes($('q').value) ? '' : 'none'; });
 $('cancel').onclick = () => $('dlg').close();
 $('save').onclick = saveForm;
 $('tbl').onclick = async e => {
+  const tl = e.target.closest('.tile');
+  if (tl) { roomBranch = tl.dataset.b; return show('Rooms'); }
+  if (e.target.id === 'rback') { roomBranch = null; return show('Rooms'); }
   const id = e.target.dataset.e || e.target.dataset.d; if (!id) return;
   if (e.target.dataset.e) openForm(D[tab].find(r => String(r.id) === id));
   else if (confirm('متأكد إنك عايز تحذف؟')) { try { await api({ action: 'remove', table: tab, id }); delete D[tab]; show(tab); } catch (x) { alert(x.message); } }
