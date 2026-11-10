@@ -58,6 +58,10 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
 dialog::backdrop{background:#0008}
 .row{display:flex;gap:8px;justify-content:flex-start;margin-top:8px}
 .err{color:var(--danger);min-height:20px;margin:6px 0}
+.grp{margin-bottom:12px;color:var(--mute);font-size:13px}
+.chk{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px}
+.chk label.c{display:inline-flex;align-items:center;gap:6px;margin:0;color:var(--ink);font-size:14px}
+.chk input{width:auto;margin:0}
 .hint{font-size:12px;color:var(--mute);margin:-6px 0 12px}
 </style>
 </head>
@@ -98,11 +102,11 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbxrz3ozzqeu9jX_OLboocnF
 
 const SCHEMA = {
   Employees: { label: 'الموظفين', perm: 'employees', cols: ['name', 'role', 'branch', 'phone', 'status'], f: [
-    ['name', 'الاسم', 'text'], ['role', 'الدور', 'sel:Roles'], ['branch', 'الفرع الأساسي', 'sel:Branches'],
+    ['name', 'الاسم', 'text'], ['role', 'الأدوار (ممكن أكتر من دور)', 'multi:Roles'], ['branch', 'الفرع الأساسي', 'sel:Branches'],
     ['fingerprintId', 'كود البصمة', 'text'], ['baseSalary', 'الراتب الأساسي', 'number'],
     ['hourlyRate', 'أجر الساعة', 'number'], ['commissionPct', 'نسبة الدكتور من الكشف %', 'number'],
     ['phone', 'التليفون', 'text'], ['status', 'الحالة', 'opt:نشط,موقوف'], ['username', 'اسم الدخول (اختياري)', 'text']] },
-  Roles: { label: 'الأدوار', perm: 'roles', cols: ['name', 'perms'], f: [['name', 'اسم الدور', 'text'], ['perms', 'الصلاحيات', 'text']],
+  Roles: { label: 'الأدوار', perm: 'roles', cols: ['name', 'perms', 'scope'], f: [['name', 'اسم الدور', 'text'], ['perms', 'الصلاحيات', 'text'], ['scope', 'نطاق الرؤية', 'opt:فرعه فقط,كل الفروع']],
     hint: 'افصل بينهم بفاصلة. * = كل الصلاحيات. المتاح: employees, branches, roles, users, schedules, patients, appointments, procedures, costs (costs = رؤية أسعار الأدوات والربح)' },
   Branches: { label: 'الفروع', perm: 'branches', cols: ['name', 'address'], f: [['name', 'اسم الفرع', 'text'], ['address', 'المحافظة / العنوان', 'text']] },
   Rooms: { label: 'الغرف', perm: 'branches', cols: ['branch', 'name'], f: [['branch', 'الفرع', 'sel:Branches'], ['name', 'اسم / رقم الغرفة', 'text']] },
@@ -121,7 +125,7 @@ const SCHEMA = {
     ['date', 'التاريخ', 'date'], ['time', 'الوقت', 'time'], ['procedure', 'الإجراء', 'sel:Procedures'], ['duration', 'المدة بالدقائق', 'number'],
     ['status', 'الحالة', 'opt:محجوز,تم الحضور,اتعمل,ملغي']] }
 };
-const HEAD = { name: 'الاسم', role: 'الدور', branch: 'الفرع', phone: 'التليفون', status: 'الحالة', perms: 'الصلاحيات', address: 'العنوان',
+const HEAD = { scope: 'النطاق', name: 'الاسم', role: 'الدور', branch: 'الفرع', phone: 'التليفون', status: 'الحالة', perms: 'الصلاحيات', address: 'العنوان',
   duration: 'المدة (د)', price: 'السعر', materialsCost: 'سعر الأدوات', markupPct: 'نسبة الربح %', doctor: 'الدكتور', room: 'الغرفة', day: 'اليوم',
   from: 'من', to: 'إلى', validFrom: 'سارية من', validTo: 'سارية لحد', age: 'السن', allergies: 'الحساسية', chronic: 'أمراض مزمنة',
   source: 'المصدر', date: 'التاريخ', time: 'الوقت', patient: 'المريض', procedure: 'الإجراء' };
@@ -149,9 +153,9 @@ async function login() {
 
 function start() {
   $('login').style.display = 'none'; document.body.classList.add('in'); $('app').style.display = 'block';
-  const tabs = Object.keys(SCHEMA).filter(k => can(SCHEMA[k].perm) || ['Branches', 'Rooms', 'Roles', 'Schedules', 'Procedures'].includes(k));
+  const tabs = Object.keys(SCHEMA).filter(k => can(SCHEMA[k].perm) || ['Branches', 'Rooms', 'Schedules', 'Procedures'].includes(k));
   $('nav').innerHTML = '<span class="brand"><img src="logo.png" alt=""><span class="bn"><b>dental</b><i>العيادات</i></span></span>' + tabs.map(k => `<button data-t="${k}">${SCHEMA[k].label}</button>`).join('') +
-    `<span class="grow"></span><span style="color:var(--mute)">${esc(session.user.username)}</span><button id="out">خروج</button>`;
+    `<span class="grow"></span><span style="color:var(--mute)">${esc(session.user.username)}${session.user.all ? '' : ' (' + esc(session.user.branch) + ')'}</span><button id="out">خروج</button>`;
   $('nav').onclick = e => { if (e.target.dataset.t) show(e.target.dataset.t); if (e.target.id === 'out') { sessionStorage.clear(); location.reload(); } };
   show(tabs[0]);
 }
@@ -177,18 +181,19 @@ async function show(t) {
 async function openForm(row) {
   const S = SCHEMA[tab]; editing = row || {};
   const need = { doc: 'Employees', rm: 'Rooms', pt: 'Patients' };
-  for (const [, , ty] of S.f) { const t = ty.startsWith('sel:') ? ty.slice(4) : need[ty]; if (t && !D[t]) await load(t); }
+  for (const [, , ty] of S.f) { const t = /^(sel|multi):/.test(ty) ? ty.split(':')[1] : need[ty]; if (t && !D[t]) await load(t); }
   $('dt').textContent = (row ? 'تعديل ' : 'إضافة ') + S.label; $('ferr').textContent = '';
   $('fields').innerHTML = S.f.filter(f => !(f[3] && !can('costs'))).map(([k, l, ty]) => {
     const v = esc(editing[k]);
     let inp;
-    if (ty === 'doc') inp = `<select name="${k}">` + D.Employees.filter(o => o.role === 'دكتور').map(o => `<option ${o.name === editing[k] ? 'selected' : ''}>${esc(o.name)}</option>`).join('') + '</select>';
+    if (ty === 'doc') inp = `<select name="${k}">` + D.Employees.filter(o => String(o.role).split(',').includes('دكتور')).map(o => `<option ${o.name === editing[k] ? 'selected' : ''}>${esc(o.name)}</option>`).join('') + '</select>';
     else if (ty === 'rm') inp = `<select name="${k}"></select>`;
     else if (ty === 'pt') inp = `<input name="${k}" list="ptl" value="${v}"><datalist id="ptl">` + D.Patients.map(o => `<option value="${esc(o.name)} - ${esc(o.phone)}">`).join('') + '</datalist>';
-    else if (ty.startsWith('sel:')) inp = `<select name="${k}">` + D[ty.slice(4)].map(o => `<option ${o.name === editing[k] ? 'selected' : ''}>${esc(o.name)}</option>`).join('') + '</select>';
+    else if (ty.startsWith('sel:')) inp = `<select name="${k}">` + D[ty.slice(4)].filter(o => ty !== 'sel:Branches' || session.user.all || !session.user.branch || o.name === session.user.branch).map(o => `<option ${o.name === editing[k] ? 'selected' : ''}>${esc(o.name)}</option>`).join('') + '</select>';
+    else if (ty.startsWith('multi:')) inp = `<div class="chk" data-name="${k}">` + D[ty.slice(6)].map(o => `<label class="c"><input type="checkbox" value="${esc(o.name)}" ${String(editing[k] || '').split(',').includes(o.name) ? 'checked' : ''}> ${esc(o.name)}</label>`).join('') + '</div>';
     else if (ty.startsWith('opt:')) inp = `<select name="${k}">` + ty.slice(4).split(',').map(o => `<option ${o === editing[k] ? 'selected' : ''}>${o}</option>`).join('') + '</select>';
     else inp = `<input name="${k}" type="${ty}" value="${v}">`;
-    return `<label>${l}${inp}</label>`;
+    return ty.startsWith('multi:') ? `<div class="grp"><span>${l}</span>${inp}</div>` : `<label>${l}${inp}</label>`;
   }).join('') + (S.hint ? `<div class="hint">${S.hint}</div>` : '') +
     (tab === 'Employees' ? '<label>كلمة سر الدخول (املاها لو عايز تنشئ أو تغيّر المستخدم)<input name="_pw" type="password" autocomplete="new-password"></label>' : '');
   const el = n => document.querySelector(`#fields [name="${n}"]`);
@@ -201,6 +206,7 @@ async function openForm(row) {
 async function saveForm() {
   const row = { ...editing }; let pw;
   document.querySelectorAll('#fields [name]').forEach(el => { if (el.name === '_pw') pw = el.value; else row[el.name] = el.value; });
+  document.querySelectorAll('#fields .chk').forEach(c => { row[c.dataset.name] = [...c.querySelectorAll('input:checked')].map(i => i.value).join(','); });
   $('save').disabled = true;
   try { await api({ action: 'save', table: tab, row, password: pw }); $('dlg').close(); delete D[tab]; show(tab); }
   catch (e) { $('ferr').textContent = e.message; }
