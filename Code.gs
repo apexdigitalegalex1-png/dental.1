@@ -100,6 +100,12 @@ function handle(q) {
   const u = JSON.parse(CacheService.getScriptCache().get('t_' + q.token) || 'null');
   if (!u) throw new Error('انتهت الجلسة، سجّل دخول تاني');
   const can = p => u.perms.includes('*') || u.perms.includes(p);
+  if (q.action === 'seedDemo' || q.action === 'clearDemo') { // للمدير فقط: تعبئة/مسح البيانات التجريبية من الموقع
+    if (!u.perms.includes('*')) throw new Error('للمدير فقط');
+    const lk = LockService.getScriptLock(); lk.waitLock(30000);
+    try { if (q.action === 'seedDemo') seedDemoData(); else clearDemoData(); } finally { lk.releaseLock(); }
+    return true;
+  }
   const n = q.table;
   if (!T[n] || n === 'Users') throw new Error('جدول غير معروف');
 

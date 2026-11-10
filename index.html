@@ -155,8 +155,8 @@ function start() {
   $('login').style.display = 'none'; document.body.classList.add('in'); $('app').style.display = 'block';
   const tabs = Object.keys(SCHEMA).filter(k => can(SCHEMA[k].perm) || ['Branches', 'Rooms', 'Schedules', 'Procedures'].includes(k));
   $('nav').innerHTML = '<span class="brand"><img src="logo.png" alt=""><span class="bn"><b>dental</b><i>العيادات</i></span></span>' + tabs.map(k => `<button data-t="${k}">${SCHEMA[k].label}</button>`).join('') +
-    `<span class="grow"></span><span style="color:var(--mute)">${esc(session.user.username)}${session.user.all ? '' : ' (' + esc(session.user.branch) + ')'}</span><button id="out">خروج</button>`;
-  $('nav').onclick = e => { if (e.target.dataset.t) show(e.target.dataset.t); if (e.target.id === 'out') { sessionStorage.clear(); location.reload(); } };
+    `<span class="grow"></span><span style="color:var(--mute)">${esc(session.user.username)}${session.user.all ? '' : ' (' + esc(session.user.branch) + ')'}</span>${can('*') ? '<button id="seed">بيانات تجريبية</button><button id="unseed">مسح التجريبي</button>' : ''}<button id="out">خروج</button>`;
+  $('nav').onclick = e => { if (e.target.dataset.t) show(e.target.dataset.t); if (e.target.id === 'seed') demo('seedDemo'); if (e.target.id === 'unseed') demo('clearDemo'); if (e.target.id === 'out') { sessionStorage.clear(); location.reload(); } };
   show(tabs[0]);
 }
 
@@ -213,6 +213,12 @@ async function saveForm() {
   $('save').disabled = false;
 }
 
+async function demo(a) {
+  if (!confirm(a === 'seedDemo' ? 'هيتم إضافة بيانات تجريبية (غرف وموظفين وجداول ومرضى ومواعيد) وممكن ياخد حوالي نص دقيقة. متابعة؟' : 'هيتم مسح البيانات التجريبية فقط. متابعة؟')) return;
+  $('title').textContent = 'جاري التنفيذ… استنى شوية';
+  try { await api({ action: a }); D = {}; alert('تم'); } catch (e) { alert(e.message); }
+  show(tab);
+}
 $('lbtn').onclick = login;
 $('p').onkeydown = e => { if (e.key === 'Enter') login(); };
 $('add').onclick = () => openForm(null);
