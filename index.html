@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>العيادات dental</title>
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef4f9;--panel:#fff;--ink:#0f2a3d;--mute:#587186;--line:#d3e1ec;--accent:#2b6a99;--accent-ink:#fff;--danger:#b3261e;--flow:#2b6a99}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1721;--panel:#12232f;--ink:#e8f1f7;--mute:#8fa6b6;--line:#21384a;--accent:#5aa7de;--accent-ink:#061a26;--danger:#ff8a80;--flow:#5aa7de}}
+*{box-sizing:border-box}
+body{margin:0;font-family:"IBM Plex Sans Arabic",Tahoma,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:8px 14px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.link{border:0;background:none;color:var(--accent);padding:4px 8px}
+button.link.del{color:var(--danger)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+label{display:block;margin-bottom:12px;color:var(--mute);font-size:13px}
+label input,label select{margin-top:4px;color:var(--ink);font-size:15px}
+#login{position:relative;z-index:1;width:calc(100% - 28px);max-width:380px;margin:9vh auto 0;background:var(--panel);padding:34px 30px 30px;border-radius:14px;border:1px solid var(--line);box-shadow:0 18px 50px -28px rgba(20,60,95,.45)}
+#login button.primary{width:100%;padding:11px;font-weight:500;margin-top:4px}
+#login button.primary:hover{filter:brightness(1.08)}
+#login input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.flow{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;color:var(--flow)}
+body.in .flow{display:none}
+.sub{text-align:center;color:var(--mute);margin:-6px 0 24px;font-size:14px}
+#login h1{display:none}
+.logo{display:block;margin:0 auto 10px;width:120px}
+.name{text-align:center;margin-bottom:24px;line-height:1}
+.name b{display:block;font-family:Jost,"IBM Plex Sans Arabic",sans-serif;font-weight:500;font-size:40px;letter-spacing:.16em;padding-inline-start:.16em;color:var(--accent)}
+.name span{display:flex;align-items:center;gap:12px;justify-content:center;margin-top:10px;color:var(--mute);font-weight:500;font-size:16px}
+.name span::before,.name span::after{content:"";width:34px;height:1.5px;background:var(--accent);opacity:.45;border-radius:2px}
+.brand{display:flex;align-items:center;gap:9px;margin-inline-end:14px}
+.brand .bn{display:flex;flex-direction:column;line-height:1;gap:3px}
+.brand b{font-family:Jost,sans-serif;font-weight:500;font-size:19px;letter-spacing:.12em;color:var(--accent)}
+.brand i{font-style:normal;font-size:11px;color:var(--mute);font-weight:500}
+.brand img{width:30px;height:30px;object-fit:contain}
+@media (prefers-color-scheme:dark){.logo,.brand img{filter:brightness(1.5)}}
+#app{display:none;min-height:100vh}
+nav{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+nav .grow{flex:1}
+nav button{border:0;background:none;color:var(--mute);padding:8px 10px}
+nav button.on{background:var(--accent);color:var(--accent-ink)}
+main{padding:20px 16px;max-width:1100px;margin:auto}
+.bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.bar h2{margin:0;font-size:19px}
+.wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mute);font-weight:500;font-size:13px}
+tr:last-child td{border-bottom:0}
+.empty{padding:28px;text-align:center;color:var(--mute)}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);width:min(440px,94vw);padding:22px}
+dialog::backdrop{background:#0008}
+.row{display:flex;gap:8px;justify-content:flex-start;margin-top:8px}
+.err{color:var(--danger);min-height:20px;margin:6px 0}
+.hint{font-size:12px;color:var(--mute);margin:-6px 0 12px}
+</style>
+</head>
+<body>
+<svg class="flow" viewBox="0 0 1200 700" preserveAspectRatio="none" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round">
+  <path d="M-20 430 C 180 340, 420 360, 640 440 S 1000 520, 1220 400" stroke-width="3" opacity=".28"/>
+  <path d="M-20 470 C 220 400, 460 410, 660 480 S 1020 560, 1220 450" stroke-width="1.5" opacity=".16"/>
+  <path d="M1020 470 c-26-34 18-58 30-30 c10 24-26 36-30 12" stroke-width="3" opacity=".28"/>
+</svg>
+<div id="login">
+  <img class="logo" src="logo.png" alt="">
+  <div class="name"><b>dental</b><span>العيادات</span></div>
+  <div class="sub">سجّل دخولك لإدارة الفروع</div>
+  <label>اسم الدخول<input id="u" autocomplete="username"></label>
+  <label>كلمة السر<input id="p" type="password" autocomplete="current-password"></label>
+  <div class="err" id="lerr"></div>
+  <button class="primary" id="lbtn" style="width:100%">دخول</button>
+</div>
+
+<div id="app">
+  <nav id="nav"></nav>
+  <main>
+    <div class="bar"><h2 id="title"></h2><div style="display:flex;gap:8px"><input id="q" placeholder="بحث…" style="width:180px"><button class="primary" id="add">إضافة</button></div></div>
+    <div class="wrap" id="tbl"></div>
+  </main>
+</div>
+
+<dialog id="dlg">
+  <h3 id="dt" style="margin-top:0"></h3>
+  <div id="fields"></div>
+  <div class="err" id="ferr"></div>
+  <div class="row"><button class="primary" id="save">حفظ</button><button id="cancel">إلغاء</button></div>
+</dialog>
+
+<script>
+// ضع هنا رابط الـ Web App بعد النشر من Apps Script
+const API_URL = 'PASTE_WEB_APP_URL_HERE';
+
+const SCHEMA = {
+  Employees: { label: 'الموظفين', perm: 'employees', cols: ['name', 'role', 'branch', 'phone', 'status'], f: [
+    ['name', 'الاسم', 'text'], ['role', 'الدور', 'sel:Roles'], ['branch', 'الفرع الأساسي', 'sel:Branches'],
+    ['fingerprintId', 'كود البصمة', 'text'], ['baseSalary', 'الراتب الأساسي', 'number'],
+    ['hourlyRate', 'أجر الساعة', 'number'], ['commissionPct', 'نسبة الدكتور من الكشف %', 'number'],
+    ['phone', 'التليفون', 'text'], ['status', 'الحالة', 'opt:نشط,موقوف'], ['username', 'اسم الدخول (اختياري)', 'text']] },
+  Roles: { label: 'الأدوار', perm: 'roles', cols: ['name', 'perms'], f: [['name', 'اسم الدور', 'text'], ['perms', 'الصلاحيات', 'text']],
+    hint: 'افصل بينهم بفاصلة. * = كل الصلاحيات. المتاح: employees, branches, roles, users, schedules, patients, appointments, procedures, costs (costs = رؤية أسعار الأدوات والربح)' },
+  Branches: { label: 'الفروع', perm: 'branches', cols: ['name', 'address'], f: [['name', 'اسم الفرع', 'text'], ['address', 'المحافظة / العنوان', 'text']] },
+  Rooms: { label: 'الغرف', perm: 'branches', cols: ['branch', 'name'], f: [['branch', 'الفرع', 'sel:Branches'], ['name', 'اسم / رقم الغرفة', 'text']] },
+  Procedures: { label: 'الإجراءات والأسعار', perm: 'procedures', cols: ['name', 'duration', 'price', 'materialsCost', 'markupPct'], f: [
+    ['name', 'الإجراء (حشو، تنظيف، ...)', 'text'], ['duration', 'المدة بالدقائق', 'number'], ['price', 'سعر الإجراء للمريض', 'number'],
+    ['materialsCost', 'سعر الأدوات (جملة)', 'number', 1], ['markupPct', 'نسبة الربح على الأدوات %', 'number', 1]] },
+  Schedules: { label: 'جداول الدكاترة', perm: 'schedules', cols: ['doctor', 'branch', 'room', 'day', 'from', 'to', 'validFrom', 'validTo'], f: [
+    ['doctor', 'الدكتور', 'doc'], ['branch', 'الفرع', 'sel:Branches'], ['room', 'الغرفة', 'rm'],
+    ['day', 'اليوم', 'opt:السبت,الأحد,الاثنين,الثلاثاء,الأربعاء,الخميس,الجمعة'], ['from', 'من', 'time'], ['to', 'إلى', 'time'],
+    ['validFrom', 'سارية من', 'date'], ['validTo', 'سارية لحد (اتركه فاضي لو مفتوح)', 'date']] },
+  Patients: { label: 'المرضى', perm: 'patients', cols: ['name', 'phone', 'age', 'allergies', 'chronic', 'source'], f: [
+    ['name', 'الاسم', 'text'], ['phone', 'التليفون', 'text'], ['age', 'السن', 'number'], ['allergies', 'الحساسية', 'text'],
+    ['chronic', 'الأمراض المزمنة', 'text'], ['source', 'عرف العيادة منين', 'opt:فيسبوك,انستجرام,صديق أو قريب,جوجل,إعلان,غير ذلك'], ['notes', 'ملاحظات', 'text']] },
+  Appointments: { label: 'المواعيد', perm: 'appointments', cols: ['date', 'time', 'patient', 'doctor', 'branch', 'room', 'procedure', 'status'], f: [
+    ['patient', 'المريض (اكتب الاسم واختار)', 'pt'], ['branch', 'الفرع', 'sel:Branches'], ['doctor', 'الدكتور', 'doc'], ['room', 'الغرفة', 'rm'],
+    ['date', 'التاريخ', 'date'], ['time', 'الوقت', 'time'], ['procedure', 'الإجراء', 'sel:Procedures'], ['duration', 'المدة بالدقائق', 'number'],
+    ['status', 'الحالة', 'opt:محجوز,تم الحضور,اتعمل,ملغي']] }
+};
+const HEAD = { name: 'الاسم', role: 'الدور', branch: 'الفرع', phone: 'التليفون', status: 'الحالة', perms: 'الصلاحيات', address: 'العنوان',
+  duration: 'المدة (د)', price: 'السعر', materialsCost: 'سعر الأدوات', markupPct: 'نسبة الربح %', doctor: 'الدكتور', room: 'الغرفة', day: 'اليوم',
+  from: 'من', to: 'إلى', validFrom: 'سارية من', validTo: 'سارية لحد', age: 'السن', allergies: 'الحساسية', chronic: 'أمراض مزمنة',
+  source: 'المصدر', date: 'التاريخ', time: 'الوقت', patient: 'المريض', procedure: 'الإجراء' };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let session = null, tab = null, D = {}, editing = null;
+
+async function api(body) {
+  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ token: session && session.token, ...body }) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error);
+  return j.data;
+}
+const can = p => session.user.perms.includes('*') || session.user.perms.includes(p);
+
+async function login() {
+  $('lerr').textContent = '';
+  try {
+    session = await api({ action: 'login', username: $('u').value.trim(), password: $('p').value });
+    sessionStorage.setItem('s', JSON.stringify(session));
+    start();
+  } catch (e) { $('lerr').textContent = e.message; }
+}
+
+function start() {
+  $('login').style.display = 'none'; document.body.classList.add('in'); $('app').style.display = 'block';
+  const tabs = Object.keys(SCHEMA).filter(k => can(SCHEMA[k].perm) || ['Branches', 'Rooms', 'Roles', 'Schedules', 'Procedures'].includes(k));
+  $('nav').innerHTML = '<span class="brand"><img src="logo.png" alt=""><span class="bn"><b>dental</b><i>العيادات</i></span></span>' + tabs.map(k => `<button data-t="${k}">${SCHEMA[k].label}</button>`).join('') +
+    `<span class="grow"></span><span style="color:var(--mute)">${esc(session.user.username)}</span><button id="out">خروج</button>`;
+  $('nav').onclick = e => { if (e.target.dataset.t) show(e.target.dataset.t); if (e.target.id === 'out') { sessionStorage.clear(); location.reload(); } };
+  show(tabs[0]);
+}
+
+async function load(t) { D[t] = await api({ action: 'list', table: t }); return D[t]; }
+
+async function show(t) {
+  tab = t; const S = { ...SCHEMA[t] }; $('q').value = '';
+  S.cols = S.cols.filter(c => { const f = SCHEMA[t].f.find(x => x[0] === c); return !(f && f[3] && !can('costs')); });
+  document.querySelectorAll('nav button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  $('title').textContent = S.label; $('add').style.display = can(S.perm) ? '' : 'none';
+  $('tbl').innerHTML = '<div class="empty">جاري التحميل…</div>';
+  try {
+    const rows = await load(t);
+    if (!rows.length) { $('tbl').innerHTML = `<div class="empty">مفيش بيانات في ${S.label} لسه. دوس "إضافة" لتبدأ.</div>`; return; }
+    $('tbl').innerHTML = '<table><thead><tr>' + S.cols.map(c => `<th>${HEAD[c] || c}</th>`).join('') + '<th></th></tr></thead><tbody>' +
+      rows.map(r => '<tr>' + S.cols.map(c => `<td>${esc(r[c])}</td>`).join('') +
+        `<td>${can(S.perm) ? `<button class="link" data-e="${esc(r.id)}">تعديل</button><button class="link del" data-d="${esc(r.id)}">حذف</button>` : ''}</td></tr>`).join('') +
+      '</tbody></table>';
+  } catch (e) { $('tbl').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+async function openForm(row) {
+  const S = SCHEMA[tab]; editing = row || {};
+  const need = { doc: 'Employees', rm: 'Rooms', pt: 'Patients' };
+  for (const [, , ty] of S.f) { const t = ty.startsWith('sel:') ? ty.slice(4) : need[ty]; if (t && !D[t]) await load(t); }
+  $('dt').textContent = (row ? 'تعديل ' : 'إضافة ') + S.label; $('ferr').textContent = '';
+  $('fields').innerHTML = S.f.filter(f => !(f[3] && !can('costs'))).map(([k, l, ty]) => {
+    const v = esc(editing[k]);
+    let inp;
+    if (ty === 'doc') inp = `<select name="${k}">` + D.Employees.filter(o => o.role === 'دكتور').map(o => `<option ${o.name === editing[k] ? 'selected' : ''}>${esc(o.name)}</option>`).join('') + '</select>';
+    else if (ty === 'rm') inp = `<select name="${k}"></select>`;
+    else if (ty === 'pt') inp = `<input name="${k}" list="ptl" value="${v}"><datalist id="ptl">` + D.Patients.map(o => `<option value="${esc(o.name)} - ${esc(o.phone)}">`).join('') + '</datalist>';
+    else if (ty.startsWith('sel:')) inp = `<select name="${k}">` + D[ty.slice(4)].map(o => `<option ${o.name === editing[k] ? 'selected' : ''}>${esc(o.name)}</option>`).join('') + '</select>';
+    else if (ty.startsWith('opt:')) inp = `<select name="${k}">` + ty.slice(4).split(',').map(o => `<option ${o === editing[k] ? 'selected' : ''}>${o}</option>`).join('') + '</select>';
+    else inp = `<input name="${k}" type="${ty}" value="${v}">`;
+    return `<label>${l}${inp}</label>`;
+  }).join('') + (S.hint ? `<div class="hint">${S.hint}</div>` : '') +
+    (tab === 'Employees' ? '<label>كلمة سر الدخول (املاها لو عايز تنشئ أو تغيّر المستخدم)<input name="_pw" type="password" autocomplete="new-password"></label>' : '');
+  const el = n => document.querySelector(`#fields [name="${n}"]`);
+  const fillRooms = () => { const r = el('room'); if (!r) return; r.innerHTML = D.Rooms.filter(x => x.branch === el('branch').value).map(x => `<option ${x.name === editing.room ? 'selected' : ''}>${esc(x.name)}</option>`).join(''); };
+  if (el('room')) { fillRooms(); el('branch').onchange = fillRooms; }
+  if (el('procedure')) { el('procedure').onchange = () => { const p = D.Procedures.find(x => x.name === el('procedure').value); if (p) el('duration').value = p.duration; }; if (!editing.duration) el('procedure').onchange(); }
+  $('dlg').showModal();
+}
+
+async function saveForm() {
+  const row = { ...editing }; let pw;
+  document.querySelectorAll('#fields [name]').forEach(el => { if (el.name === '_pw') pw = el.value; else row[el.name] = el.value; });
+  $('save').disabled = true;
+  try { await api({ action: 'save', table: tab, row, password: pw }); $('dlg').close(); delete D[tab]; show(tab); }
+  catch (e) { $('ferr').textContent = e.message; }
+  $('save').disabled = false;
+}
+
+$('lbtn').onclick = login;
+$('p').onkeydown = e => { if (e.key === 'Enter') login(); };
+$('add').onclick = () => openForm(null);
+$('q').oninput = () => document.querySelectorAll('#tbl tbody tr').forEach(tr => { tr.style.display = tr.textContent.includes($('q').value) ? '' : 'none'; });
+$('cancel').onclick = () => $('dlg').close();
+$('save').onclick = saveForm;
+$('tbl').onclick = async e => {
+  const id = e.target.dataset.e || e.target.dataset.d; if (!id) return;
+  if (e.target.dataset.e) openForm(D[tab].find(r => String(r.id) === id));
+  else if (confirm('متأكد إنك عايز تحذف؟')) { try { await api({ action: 'remove', table: tab, id }); delete D[tab]; show(tab); } catch (x) { alert(x.message); } }
+};
+const saved = sessionStorage.getItem('s'); if (saved) { session = JSON.parse(saved); start(); }
+</script>
+</body>
+</html>
