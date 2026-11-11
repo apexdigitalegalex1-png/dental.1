@@ -41,10 +41,34 @@ body.in .flow{display:none}
 .brand img{width:30px;height:30px;object-fit:contain}
 @media (prefers-color-scheme:dark){.logo,.brand img{filter:brightness(1.5)}}
 #app{display:none;min-height:100vh}
-nav{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-nav .grow{flex:1}
-nav button{border:0;background:none;color:var(--mute);padding:8px 10px}
-nav button.on{background:var(--accent);color:var(--accent-ink)}
+#side{width:240px;flex:none;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--panel);border-inline-end:1px solid var(--line);transition:width .18s}
+#nav{display:flex;flex-direction:column;gap:4px;padding:12px 10px;min-height:100%}
+.content{flex:1;min-width:0}
+.sh{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 14px}
+.sh .brand{margin:0}
+.sp{flex:1}
+.who{font-size:13px;color:var(--mute);padding:6px 12px}
+.item{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;color:var(--mute);padding:10px 12px;border-radius:8px;text-align:right}
+.item:hover{background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--ink)}
+.item.on{background:var(--accent);color:var(--accent-ink)}
+.item svg,#collapse svg,#burger svg{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#collapse,#burger{border:0;background:none;color:var(--mute);padding:6px;border-radius:6px;display:flex}
+#collapse svg{transition:transform .18s}
+.topbar,#scrim{display:none}
+@media (min-width:821px){
+  #app.col #side{width:68px}
+  #app.col .lbl{display:none}
+  #app.col .item{justify-content:center;padding:10px}
+  #app.col .sh{flex-direction:column;gap:12px}
+  #app.col #collapse svg{transform:rotate(180deg)}
+}
+@media (max-width:820px){
+  #collapse{display:none}
+  #side{position:fixed;top:0;bottom:0;inset-inline-start:0;z-index:30;transform:translateX(100%);transition:transform .2s;box-shadow:-10px 0 30px -12px #0006}
+  body.menu #side{transform:none}
+  body.menu #scrim{display:block;position:fixed;inset:0;background:#0006;z-index:20}
+  .topbar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+}
 main{padding:20px 16px;max-width:1100px;margin:auto}
 .bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .bar h2{margin:0;font-size:19px}
@@ -90,11 +114,15 @@ dialog::backdrop{background:#0008}
 </div>
 
 <div id="app">
-  <nav id="nav"></nav>
+  <aside id="side"><nav id="nav"></nav></aside>
+  <div id="scrim"></div>
+  <div class="content">
+  <div class="topbar"><button id="burger" aria-label="القائمة"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span class="brand"><img src="logo.png" alt=""><span class="bn"><b>dental</b><i>العيادات</i></span></span></div>
   <main>
     <div class="bar"><h2 id="title"></h2><div style="display:flex;gap:8px"><input id="q" placeholder="بحث…" style="width:180px"><button class="primary" id="add">إضافة</button></div></div>
     <div class="wrap" id="tbl"></div>
   </main>
+  </div>
 </div>
 
 <dialog id="dlg">
@@ -159,12 +187,40 @@ async function login() {
   } catch (e) { $('lerr').textContent = e.message; }
 }
 
+const svg = p => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+const IC = {
+  Employees: '<path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="8" r="3.5"/><path d="M21 20v-1a4 4 0 0 0-3-3.9M16 4.2a3.5 3.5 0 0 1 0 7.6"/>',
+  Roles: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  Branches: '<path d="M4 21V5l8-2 8 2v16"/><path d="M9 21v-5h6v5M8 9h2M14 9h2M8 13h2M14 13h2"/>',
+  Rooms: '<path d="M6 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17M3 21h18"/><circle cx="14.5" cy="12.5" r=".8"/>',
+  Schedules: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><circle cx="12" cy="15" r="2.5"/>',
+  Procedures: '<path d="M9 4h6l1 2h3v15H5V6h3z"/><path d="M9 12h6M9 16h4"/>',
+  Patients: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
+  Appointments: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M9 15l2 2 4-4"/>',
+  seed: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+  unseed: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  out: '<path d="M9 21H5V3h4M16 17l5-5-5-5M21 12H9"/>'
+};
+
 function start() {
-  $('login').style.display = 'none'; document.body.classList.add('in'); $('app').style.display = 'block';
+  $('login').style.display = 'none'; document.body.classList.add('in'); $('app').style.display = 'flex';
   const tabs = Object.keys(SCHEMA).filter(k => can(SCHEMA[k].perm) || ['Branches', 'Rooms', 'Schedules', 'Procedures'].includes(k));
-  $('nav').innerHTML = '<span class="brand"><img src="logo.png" alt=""><span class="bn"><b>dental</b><i>العيادات</i></span></span>' + tabs.map(k => `<button data-t="${k}">${SCHEMA[k].label}</button>`).join('') +
-    `<span class="grow"></span><span style="color:var(--mute)">${esc(session.user.username)}${session.user.all ? '' : ' (' + esc(session.user.branch) + ')'}</span>${can('*') ? '<button id="seed">بيانات تجريبية</button><button id="unseed">مسح التجريبي</button>' : ''}<button id="out">خروج</button>`;
-  $('nav').onclick = e => { if (e.target.dataset.t) { roomBranch = null; show(e.target.dataset.t); } if (e.target.id === 'seed') demo('seedDemo'); if (e.target.id === 'unseed') demo('clearDemo'); if (e.target.id === 'out') { sessionStorage.clear(); location.reload(); } };
+  const it = (attrs, ic, label) => `<button class="item" ${attrs} title="${label}">${svg(ic)}<span class="lbl">${label}</span></button>`;
+  $('nav').innerHTML = `<div class="sh"><span class="brand"><img src="logo.png" alt=""><span class="bn lbl"><b>dental</b><i>العيادات</i></span></span><button id="collapse" aria-label="طي القائمة">${svg('<path d="M9 6l6 6-6 6"/>')}</button></div>` +
+    tabs.map(k => it(`data-t="${k}"`, IC[k], SCHEMA[k].label)).join('') + '<div class="sp"></div>' +
+    `<div class="who lbl">${esc(session.user.username)}${session.user.all ? '' : ' (' + esc(session.user.branch) + ')'}</div>` +
+    (can('*') ? it('id="seed"', IC.seed, 'بيانات تجريبية') + it('id="unseed"', IC.unseed, 'مسح التجريبي') : '') + it('id="out"', IC.out, 'خروج');
+  try { if (localStorage.getItem('col') === '1') $('app').classList.add('col'); } catch (e) {}
+  $('nav').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'collapse') { const c = $('app').classList.toggle('col'); try { localStorage.setItem('col', c ? '1' : '0'); } catch (x) {} return; }
+    document.body.classList.remove('menu');
+    if (b.dataset.t) { roomBranch = null; show(b.dataset.t); }
+    if (b.id === 'seed') demo('seedDemo'); if (b.id === 'unseed') demo('clearDemo');
+    if (b.id === 'out') { sessionStorage.clear(); location.reload(); }
+  };
+  $('burger').onclick = () => document.body.classList.toggle('menu');
+  $('scrim').onclick = () => document.body.classList.remove('menu');
   show(tabs[0]);
 }
 
