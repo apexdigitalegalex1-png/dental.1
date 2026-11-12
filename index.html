@@ -94,6 +94,9 @@ dialog::backdrop{background:#0008}
 .tile .tn{font-size:18px;font-weight:600}
 .tile .tc{margin-top:auto;font-size:13px;color:var(--accent)}
 #rback{margin-bottom:10px;padding-inline-start:0}
+.tools{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
+.tools label{margin:0;min-width:150px}
+tfoot td{font-weight:600;background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .hint{font-size:12px;color:var(--mute);margin:-6px 0 12px}
 </style>
 </head>
@@ -125,6 +128,15 @@ dialog::backdrop{background:#0008}
   </div>
 </div>
 
+<dialog id="imp" style="width:min(520px,94vw)">
+  <h3 style="margin-top:0">استيراد حضور من جهاز البصمة</h3>
+  <label>الفرع اللي الجهاز فيه<select id="ibr"></select></label>
+  <label>ملف CSV (من Excel: Save As ← CSV)<input type="file" id="ifile" accept=".csv,.txt,text/csv"></label>
+  <div id="imap"></div>
+  <div class="hint" id="iprev" style="font-size:13px;margin:8px 0"></div>
+  <div class="err" id="ierr"></div>
+  <div class="row"><button class="primary" id="irun" disabled>استيراد</button><button id="iclose">إغلاق</button></div>
+</dialog>
 <dialog id="dlg">
   <h3 id="dt" style="margin-top:0"></h3>
   <div id="fields"></div>
@@ -141,9 +153,10 @@ const SCHEMA = {
     ['name', 'الاسم', 'text'], ['role', 'الأدوار (ممكن أكتر من دور)', 'multi:Roles'], ['branch', 'الفرع الأساسي', 'sel:Branches'],
     ['fingerprintId', 'كود البصمة', 'text'], ['baseSalary', 'الراتب الأساسي', 'number'],
     ['hourlyRate', 'أجر الساعة', 'number'], ['commissionPct', 'نسبة الدكتور من الكشف %', 'number'],
-    ['phone', 'التليفون', 'text'], ['status', 'الحالة', 'opt:نشط,موقوف'], ['username', 'اسم الدخول (اختياري)', 'text']] },
+    ['phone', 'التليفون', 'text'], ['status', 'الحالة', 'opt:نشط,موقوف'], ['shiftStart', 'بداية الشيفت (فاضي = 09:00)', 'time'], ['shiftEnd', 'نهاية الشيفت (فاضي = 17:00)', 'time'],
+    ['weeklyOff', 'الإجازة الأسبوعية', 'opt:الجمعة,السبت,الأحد,الاثنين,الثلاثاء,الأربعاء,الخميس'], ['username', 'اسم الدخول (اختياري)', 'text']] },
   Roles: { label: 'الأدوار', perm: 'roles', cols: ['name', 'perms', 'scope'], f: [['name', 'اسم الدور', 'text'], ['perms', 'الصلاحيات', 'text'], ['scope', 'نطاق الرؤية', 'opt:فرعه فقط,كل الفروع']],
-    hint: 'افصل بينهم بفاصلة. * = كل الصلاحيات. المتاح: employees, branches, roles, users, schedules, patients, appointments, procedures, costs (costs = رؤية أسعار الأدوات والربح)' },
+    hint: 'افصل بينهم بفاصلة. * = كل الصلاحيات. المتاح: employees, branches, roles, users, schedules, patients, appointments, procedures, attendance, payroll, costs (costs = رؤية أسعار الأدوات والربح)' },
   Branches: { label: 'الفروع', perm: 'branches', cols: ['name', 'address'], f: [['name', 'اسم الفرع', 'text'], ['address', 'المحافظة / العنوان', 'text']] },
   Rooms: { label: 'الغرف', perm: 'branches', cols: ['branch', 'name'], f: [['branch', 'الفرع', 'sel:Branches'], ['name', 'اسم / رقم الغرفة', 'text']] },
   Procedures: { label: 'الإجراءات والأسعار', perm: 'procedures', cols: ['name', 'duration', 'price', 'materialsCost', 'markupPct'], f: [
@@ -159,11 +172,18 @@ const SCHEMA = {
   Appointments: { label: 'المواعيد', perm: 'appointments', cols: ['date', 'time', 'patient', 'doctor', 'branch', 'room', 'procedure', 'status'], f: [
     ['patient', 'المريض (اكتب الاسم واختار)', 'pt'], ['branch', 'الفرع', 'sel:Branches'], ['doctor', 'الدكتور', 'doc'], ['room', 'الغرفة', 'rm'],
     ['date', 'التاريخ', 'date'], ['time', 'الوقت', 'time'], ['procedure', 'الإجراء', 'sel:Procedures'], ['duration', 'المدة بالدقائق', 'number'],
-    ['status', 'الحالة', 'opt:محجوز,تم الحضور,اتعمل,ملغي']] }
+    ['status', 'الحالة', 'opt:محجوز,تم الحضور,اتعمل,ملغي']] },
+  Attendance: { label: 'الحضور والانصراف', perm: 'attendance', cols: [], f: [['employee', 'الموظف', 'sel:Employees'], ['branch', 'الفرع', 'sel:Branches'],
+    ['date', 'التاريخ', 'date'], ['timeIn', 'وقت الحضور', 'time'], ['timeOut', 'وقت الانصراف', 'time']] },
+  Payroll: { label: 'كشف المرتبات', perm: 'payroll', cols: [], f: [] },
+  Adjustments: { label: 'المكافآت والخصومات', perm: 'payroll', cols: ['employee', 'month', 'type', 'amount', 'note'], f: [['employee', 'الموظف', 'sel:Employees'],
+    ['month', 'الشهر', 'month'], ['type', 'النوع', 'opt:مكافأة,خصم,سلفة'], ['amount', 'المبلغ', 'number'], ['note', 'ملاحظة', 'text']] },
+  Settings: { label: 'إعدادات المرتبات', perm: 'payroll', noAdd: 1, noDel: 1, cols: ['label', 'value'], f: [['value', 'القيمة', 'number']] }
 };
 const HEAD = { scope: 'النطاق', name: 'الاسم', role: 'الدور', branch: 'الفرع', phone: 'التليفون', status: 'الحالة', perms: 'الصلاحيات', address: 'العنوان',
   duration: 'المدة (د)', price: 'السعر', materialsCost: 'سعر الأدوات', markupPct: 'نسبة الربح %', doctor: 'الدكتور', room: 'الغرفة', day: 'اليوم',
   from: 'من', to: 'إلى', validFrom: 'سارية من', validTo: 'سارية لحد', age: 'السن', allergies: 'الحساسية', chronic: 'أمراض مزمنة',
+  employee: 'الموظف', month: 'الشهر', type: 'النوع', amount: 'المبلغ', note: 'ملاحظة', label: 'الإعداد', value: 'القيمة',
   source: 'المصدر', date: 'التاريخ', time: 'الوقت', patient: 'المريض', procedure: 'الإجراء' };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -199,7 +219,11 @@ const IC = {
   Appointments: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M9 15l2 2 4-4"/>',
   seed: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
   unseed: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
-  out: '<path d="M9 21H5V3h4M16 17l5-5-5-5M21 12H9"/>'
+  out: '<path d="M9 21H5V3h4M16 17l5-5-5-5M21 12H9"/>',
+  Attendance: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  Payroll: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v.01M18 14v.01"/>',
+  Adjustments: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 6v6M9 9h6M9 17h6"/>',
+  Settings: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'
 };
 
 function start() {
@@ -232,17 +256,133 @@ async function show(t) {
   document.querySelectorAll('nav button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === t));
   $('add').textContent = 'إضافة'; $('q').style.display = ''; $('tbl').className = 'wrap';
   if (t === 'Rooms') return showRooms();
-  $('title').textContent = S.label; $('add').style.display = can(S.perm) ? '' : 'none';
+  if (t === 'Attendance') return showAttendance();
+  if (t === 'Payroll') return showPayroll();
+  $('title').textContent = S.label; $('add').style.display = can(S.perm) && !S.noAdd ? '' : 'none';
   $('tbl').innerHTML = '<div class="empty">جاري التحميل…</div>';
   try {
     const rows = await load(t);
     if (!rows.length) { $('tbl').innerHTML = `<div class="empty">مفيش بيانات في ${S.label} لسه. دوس "إضافة" لتبدأ.</div>`; return; }
     $('tbl').innerHTML = '<table><thead><tr>' + S.cols.map(c => `<th>${HEAD[c] || c}</th>`).join('') + '<th></th></tr></thead><tbody>' +
       rows.map(r => '<tr>' + S.cols.map(c => `<td>${esc(r[c])}</td>`).join('') +
-        `<td>${can(S.perm) ? `<button class="link" data-e="${esc(r.id)}">تعديل</button><button class="link del" data-d="${esc(r.id)}">حذف</button>` : ''}</td></tr>`).join('') +
+        `<td>${can(S.perm) ? `<button class="link" data-e="${esc(r.id)}">تعديل</button>${S.noDel ? '' : `<button class="link del" data-d="${esc(r.id)}">حذف</button>`}` : ''}</td></tr>`).join('') +
       '</tbody></table>';
   } catch (e) { $('tbl').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
+
+const p2 = n => String(n).padStart(2, '0');
+const nowM = () => { const n = new Date(); return n.getFullYear() + '-' + p2(n.getMonth() + 1); };
+const money = n => Number(n || 0).toLocaleString('en-US');
+let attMonth = nowM(), attBranch = '', payMonth = nowM(), payBranch = '', payRows = [], impRows = [], impDays = [];
+const branchOpts = sel => (D.Branches || []).filter(b => session.user.all || !session.user.branch || b.name === session.user.branch)
+  .map(b => `<option ${b.name === sel ? 'selected' : ''}>${esc(b.name)}</option>`).join('');
+
+async function showAttendance() {
+  $('tbl').className = ''; $('q').style.display = ''; $('title').textContent = 'الحضور والانصراف';
+  $('add').textContent = 'إضافة يدوي'; $('add').style.display = can('attendance') ? '' : 'none';
+  try {
+    if (!D.Branches) await load('Branches');
+    const bar = `<div class="tools"><label>الشهر<input type="month" id="am" value="${attMonth}"></label><label>الفرع<select id="ab"><option value="">كل الفروع</option>${branchOpts(attBranch)}</select></label><button class="primary" id="aimp">استيراد من جهاز البصمة</button></div>`;
+    $('tbl').innerHTML = bar + '<div class="empty">جاري التحميل…</div>';
+    D.Attendance = await api({ action: 'list', table: 'Attendance', month: attMonth });
+    const rs = D.Attendance.filter(r => !attBranch || r.branch === attBranch).sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+    const hh = m => m ? Math.floor(m / 60) + ':' + p2(m % 60) : '—';
+    $('tbl').innerHTML = bar + '<div class="wrap">' + (rs.length
+      ? '<table><thead><tr><th>التاريخ</th><th>الموظف</th><th>الفرع</th><th>حضور</th><th>انصراف</th><th>المدة</th><th></th></tr></thead><tbody>' +
+        rs.slice(0, 600).map(r => `<tr><td>${esc(r.date)}</td><td>${esc(r.employee)}</td><td>${esc(r.branch)}</td><td>${esc(r.timeIn)}</td><td>${esc(r.timeOut) || 'ناقص'}</td><td>${hh(Number(r.minutes))}</td><td>${can('attendance') ? `<button class="link" data-e="${esc(r.id)}">تعديل</button><button class="link del" data-d="${esc(r.id)}">حذف</button>` : ''}</td></tr>`).join('') +
+        '</tbody></table>' + (rs.length > 600 ? `<div class="empty">معروض أول 600 من ${rs.length}. استخدم الفلتر أو البحث.</div>` : '')
+      : '<div class="empty">مفيش حضور للشهر ده. استورد ملف الجهاز أو ضيف يدوي.</div>') + '</div>';
+  } catch (e) { $('tbl').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+const PAYCOLS = [['name', 'الموظف'], ['role', 'الدور'], ['branch', 'الفرع'], ['base', 'الأساسي'], ['days', 'أيام الحضور'], ['absent', 'غياب'], ['lateMin', 'تأخير (د)'],
+  ['otMin', 'إضافي (د)'], ['hours', 'ساعات'], ['salary', 'المرتب'], ['otPay', 'الإضافي'], ['commission', 'النسبة'], ['bonus', 'مكافآت'], ['lateDed', 'خصم تأخير'],
+  ['absDed', 'خصم غياب'], ['adjDed', 'خصومات/سلف'], ['net', 'الصافي']];
+const PAYSUM = ['salary', 'otPay', 'commission', 'bonus', 'lateDed', 'absDed', 'adjDed', 'net'];
+
+async function showPayroll() {
+  $('tbl').className = ''; $('q').style.display = 'none'; $('title').textContent = 'كشف المرتبات'; $('add').style.display = 'none';
+  if (!D.Branches) await load('Branches');
+  const bar = `<div class="tools"><label>الشهر<input type="month" id="pm" value="${payMonth}"></label><label>الفرع<select id="pb"><option value="">كل الفروع</option>${branchOpts(payBranch)}</select></label><button class="primary" id="pcalc">احسب</button>${payRows.length ? '<button id="pcsv">تصدير CSV</button>' : ''}</div>`;
+  const tot = c => PAYSUM.includes(c) ? money(payRows.reduce((s, r) => s + r[c], 0)) : '';
+  $('tbl').innerHTML = bar + (payRows.length
+    ? '<div class="wrap"><table><thead><tr>' + PAYCOLS.map(c => `<th>${c[1]}</th>`).join('') + '</tr></thead><tbody>' +
+      payRows.map(r => '<tr>' + PAYCOLS.map(c => `<td>${PAYSUM.includes(c[0]) || c[0] === 'base' ? money(r[c[0]]) : esc(r[c[0]])}</td>`).join('') + '</tr>').join('') +
+      '</tbody><tfoot><tr>' + PAYCOLS.map((c, i) => `<td>${i === 0 ? 'الإجمالي (' + payRows.length + ')' : tot(c[0])}</td>`).join('') + '</tr></tfoot></table></div>'
+    : '<div class="empty">اختار الشهر (والفرع لو عايز) وادوس "احسب".</div>');
+}
+
+function csvPay() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const t = '\uFEFF' + [PAYCOLS.map(c => q(c[1])).join(',')].concat(payRows.map(r => PAYCOLS.map(c => q(r[c[0]])).join(','))).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([t], { type: 'text/csv;charset=utf-8' })); a.download = 'payroll-' + payMonth + '.csv'; a.click();
+}
+
+// ---- استيراد ملف البصمة (CSV) ----
+function csvRows(t) {
+  const L = t.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
+  if (!L.length) return [];
+  const d = [',', ';', '\t'].map(c => [c, L[0].split(c).length]).sort((a, b) => b[1] - a[1])[0][0];
+  return L.map(l => l.split(d).map(x => x.trim().replace(/^"|"$/g, '')));
+}
+function parseDT(a, b, df) {
+  const s = (a + ' ' + (b || '')).replace(/[٠-٩]/g, c => '٠١٢٣٤٥٦٧٨٩'.indexOf(c)).trim();
+  const m = s.match(/(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})/); if (!m) return null;
+  let y, mo, d;
+  if (m[1].length === 4) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else { y = +m[3]; if (y < 100) y += 2000; if (df) { d = +m[1]; mo = +m[2]; } else { mo = +m[1]; d = +m[2]; } if (mo > 12) [mo, d] = [d, mo]; }
+  const t = s.slice(m.index + m[0].length).match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPpصم])?/); if (!t) return null;
+  let h = +t[1]; const ap = t[3] || '';
+  if (/[Ppم]/.test(ap) && h < 12) h += 12;
+  if (/[Aaص]/.test(ap) && h === 12) h = 0;
+  return { date: y + '-' + p2(mo) + '-' + p2(d), time: p2(h) + ':' + t[2] };
+}
+function impCompute() {
+  const ci = +$('icid').value, cd = +$('icd').value, ct = $('ict').value === '' ? -1 : +$('ict').value, df = $('idf').value === '1', map = {};
+  let bad = 0;
+  impRows.forEach(r => {
+    const x = parseDT(r[cd] || '', ct >= 0 ? r[ct] : '', df), fp = (r[ci] || '').trim();
+    if (!x || !fp) { bad++; return; }
+    const o = map[fp + '|' + x.date] = map[fp + '|' + x.date] || { fp, date: x.date, tin: x.time, tout: x.time };
+    if (x.time < o.tin) o.tin = x.time; if (x.time > o.tout) o.tout = x.time;
+  });
+  impDays = Object.values(map);
+  const ds = impDays.map(d => d.date).sort(), f = impDays[0];
+  $('iprev').textContent = impDays.length ? `تم قراءة ${impDays.length} يوم حضور (${new Set(impDays.map(d => d.fp)).size} موظف) من ${ds[0]} إلى ${ds[ds.length - 1]}${bad ? ' — اتجاهلت ' + bad + ' سطر' : ''}. مثال: كود ${f.fp} يوم ${f.date} من ${f.tin} إلى ${f.tout}` : 'مش قادر أقرأ تاريخ ووقت من الأعمدة المختارة. غيّر الاختيار.';
+  $('irun').disabled = !impDays.length;
+}
+async function openImport() {
+  if (!D.Branches) await load('Branches');
+  $('ibr').innerHTML = branchOpts(''); $('imap').innerHTML = ''; $('iprev').textContent = ''; $('ierr').textContent = ''; $('irun').disabled = true; $('ifile').value = '';
+  $('imp').showModal();
+}
+$('ifile').onchange = async () => {
+  const f = $('ifile').files[0]; if (!f) return;
+  const all = csvRows(await f.text()); if (!all.length) { $('ierr').textContent = 'الملف فاضي'; return; }
+  const hasHdr = !/\d{1,4}[\/\-.]\d{1,2}[\/\-.]\d{1,4}/.test(all[0].join(' '));
+  const names = hasHdr ? all[0] : all[0].map((_, i) => 'عمود ' + (i + 1));
+  impRows = hasHdr ? all.slice(1) : all;
+  let ci = names.findIndex(n => /(^|[^a-z])(id|no|code)|كود|رقم/i.test(n) && !/name|اسم/i.test(n)); if (ci < 0) ci = 0;
+  let cd = names.findIndex(n => /date|تاريخ/i.test(n)), ct = names.findIndex((n, i) => i !== cd && /time|وقت/i.test(n));
+  if (cd < 0) { cd = ct; ct = -1; } if (cd < 0) cd = Math.min(1, names.length - 1);
+  const opt = (sel, none) => (none ? '<option value="">— مفيش —</option>' : '') + names.map((n, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  $('imap').innerHTML = `<label>عمود كود الموظف (البصمة)<select id="icid">${opt(ci)}</select></label><label>عمود التاريخ/الوقت<select id="icd">${opt(cd)}</select></label><label>عمود وقت منفصل (لو موجود)<select id="ict">${opt(ct, 1)}</select></label><label>ترتيب التاريخ<select id="idf"><option value="1">يوم/شهر/سنة</option><option value="0">شهر/يوم/سنة</option></select></label>`;
+  $('ierr').textContent = ''; impCompute();
+};
+$('imap').onchange = impCompute;
+$('irun').onclick = async () => {
+  $('irun').disabled = true; $('ierr').textContent = '';
+  let added = 0, updated = 0; const unk = new Set();
+  try {
+    for (let i = 0; i < impDays.length; i += 1500) {
+      $('iprev').textContent = `جاري الرفع… ${Math.min(i + 1500, impDays.length)} / ${impDays.length}`;
+      const r = await api({ action: 'importAttendance', branch: $('ibr').value, days: impDays.slice(i, i + 1500) });
+      added += r.added; updated += r.updated; r.unknown.forEach(x => unk.add(x));
+    }
+    $('iprev').textContent = `تم: ${added} يوم جديد، ${updated} اتحدّث.` + (unk.size ? ` أكواد بصمة مش مربوطة بموظف: ${[...unk].join('، ')} — حط الكود في خانة "كود البصمة" عند الموظف.` : '');
+  } catch (e) { $('ierr').textContent = e.message; $('irun').disabled = false; }
+};
+$('iclose').onclick = () => { $('imp').close(); if (tab === 'Attendance') show('Attendance'); };
 
 const plural = n => n === 0 ? 'مفيش غرف' : n === 1 ? 'غرفة واحدة' : n === 2 ? 'غرفتين' : n + (n <= 10 ? ' غرف' : ' غرفة');
 
@@ -273,7 +413,7 @@ async function openForm(row) {
   const S = SCHEMA[tab]; editing = row || {};
   const need = { doc: 'Employees', rm: 'Rooms', pt: 'Patients' };
   for (const [, , ty] of S.f) { const t = /^(sel|multi):/.test(ty) ? ty.split(':')[1] : need[ty]; if (t && !D[t]) await load(t); }
-  $('dt').textContent = (row && row.id ? 'تعديل ' : 'إضافة ') + ({ Employees: 'موظف', Roles: 'دور', Branches: 'فرع', Rooms: 'غرفة', Procedures: 'إجراء', Schedules: 'جدول دكتور', Patients: 'مريض', Appointments: 'ميعاد' }[tab] || S.label); $('ferr').textContent = '';
+  $('dt').textContent = (row && row.id ? 'تعديل ' : 'إضافة ') + ({ Employees: 'موظف', Roles: 'دور', Branches: 'فرع', Rooms: 'غرفة', Procedures: 'إجراء', Schedules: 'جدول دكتور', Patients: 'مريض', Appointments: 'ميعاد', Attendance: 'حضور', Adjustments: 'مكافأة/خصم', Settings: 'إعداد' }[tab] || S.label); $('ferr').textContent = '';
   $('fields').innerHTML = S.f.filter(f => !(f[3] && !can('costs'))).map(([k, l, ty]) => {
     const v = esc(editing[k]);
     let inp;
@@ -312,11 +452,23 @@ async function demo(a) {
 }
 $('lbtn').onclick = login;
 $('p').onkeydown = e => { if (e.key === 'Enter') login(); };
+$('tbl').onchange = e => {
+  const i = e.target.id, v = e.target.value;
+  if (i === 'am') { attMonth = v; show('Attendance'); } else if (i === 'ab') { attBranch = v; show('Attendance'); }
+  else if (i === 'pm') payMonth = v; else if (i === 'pb') payBranch = v;
+};
 $('add').onclick = () => openForm(tab === 'Rooms' && roomBranch ? { branch: roomBranch } : null);
 $('q').oninput = () => document.querySelectorAll('#tbl tbody tr').forEach(tr => { tr.style.display = tr.textContent.includes($('q').value) ? '' : 'none'; });
 $('cancel').onclick = () => $('dlg').close();
 $('save').onclick = saveForm;
 $('tbl').onclick = async e => {
+  if (e.target.id === 'aimp') return openImport();
+  if (e.target.id === 'pcsv') return csvPay();
+  if (e.target.id === 'pcalc') {
+    e.target.disabled = true;
+    try { payRows = await api({ action: 'payroll', month: payMonth, branch: payBranch }); } catch (x) { alert(x.message); }
+    return showPayroll();
+  }
   const tl = e.target.closest('.tile');
   if (tl) { roomBranch = tl.dataset.b; return show('Rooms'); }
   if (e.target.id === 'rback') { roomBranch = null; return show('Rooms'); }

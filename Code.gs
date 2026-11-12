@@ -5,19 +5,23 @@ const T = {
   Branches: ['id', 'name', 'address'],
   Rooms: ['id', 'branch', 'name'],
   Roles: ['id', 'name', 'perms', 'scope'],
-  Employees: ['id', 'name', 'role', 'branch', 'fingerprintId', 'baseSalary', 'hourlyRate', 'commissionPct', 'phone', 'status', 'username'],
+  Employees: ['id', 'name', 'role', 'branch', 'fingerprintId', 'baseSalary', 'hourlyRate', 'commissionPct', 'phone', 'status', 'username', 'shiftStart', 'shiftEnd', 'weeklyOff'],
   Users: ['username', 'hash', 'role'],
   Procedures: ['id', 'name', 'duration', 'price', 'materialsCost', 'markupPct'],
   Schedules: ['id', 'doctor', 'branch', 'room', 'day', 'from', 'to', 'validFrom', 'validTo'],
   Patients: ['id', 'name', 'phone', 'age', 'allergies', 'chronic', 'source', 'notes'],
-  Appointments: ['id', 'patient', 'doctor', 'branch', 'room', 'date', 'time', 'procedure', 'duration', 'status']
+  Appointments: ['id', 'patient', 'doctor', 'branch', 'room', 'date', 'time', 'procedure', 'duration', 'status'],
+  Attendance: ['id', 'fpId', 'employee', 'branch', 'date', 'timeIn', 'timeOut', 'minutes'],
+  Adjustments: ['id', 'employee', 'month', 'type', 'amount', 'note'],
+  Settings: ['id', 'label', 'value']
 };
-const BRN = ['Appointments', 'Schedules', 'Rooms']; // جداول مرتبطة بفرع: اللي نطاقه "فرعه فقط" مايشوفش غير فرعه
+const BRN = ['Appointments', 'Schedules', 'Rooms', 'Attendance']; // جداول مرتبطة بفرع: اللي نطاقه "فرعه فقط" مايشوفش غير فرعه
 const COSTS = ['materialsCost', 'markupPct']; // مخفية إلا لمن عنده صلاحية costs
 const DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 // الصلاحية المطلوبة للتعديل على كل جدول
 const PERM = { Employees: 'employees', Branches: 'branches', Rooms: 'branches', Roles: 'roles',
-  Procedures: 'procedures', Schedules: 'schedules', Patients: 'patients', Appointments: 'appointments' };
+  Procedures: 'procedures', Schedules: 'schedules', Patients: 'patients', Appointments: 'appointments',
+  Attendance: 'attendance', Adjustments: 'payroll', Settings: 'payroll' };
 
 const ss = () => SpreadsheetApp.getActive();
 
@@ -42,6 +46,12 @@ function setup() {
     .forEach(x => { if (!rows('Roles').some(r => r.name === x[0])) upsert('Roles', { id: 'R' + Utilities.getUuid().slice(0, 5), name: x[0], perms: x[1] }, 'id'); });
   const ALLB = ['مدير', 'مسؤول مخازن', 'استقبال ميديا', 'استقبال فون'];
   rows('Roles').forEach(r => { if (!r.scope) upsert('Roles', Object.assign({}, r, { scope: ALLB.includes(r.name) ? 'كل الفروع' : 'فرعه فقط' }), 'id'); });
+  const st = ss().getSheetByName('Settings'); // قواعد المرتبات (تقدر تعدلها من الموقع)
+  if (st.getLastRow() < 2) {
+    [['graceMin', 'سماح التأخير (دقيقة)', 15], ['otGraceMin', 'سماح قبل احتساب الإضافي (دقيقة)', 30], ['daysPerMonth', 'أيام الشهر لحساب اليومية', 30],
+     ['lateMultiplier', 'معامل خصم التأخير (1 = بنفس قيمة الوقت)', 1], ['absenceMultiplier', 'معامل خصم يوم الغياب', 1], ['overtimeMultiplier', 'معامل ساعة الإضافي', 1.5]]
+      .forEach(x => st.appendRow(x));
+  }
   const pr = ss().getSheetByName('Procedures');
   if (pr.getLastRow() < 2) {
     [['كشف', 30], ['تنظيف', 45], ['حشو', 60], ['خلع', 30], ['علاج عصب', 90]]
@@ -100,6 +110,15 @@ function handle(q) {
   const u = JSON.parse(CacheService.getScriptCache().get('t_' + q.token) || 'null');
   if (!u) throw new Error('انتهت الجلسة، سجّل دخول تاني');
   const can = p => u.perms.includes('*') || u.perms.includes(p);
+  if (q.action === 'payroll') {
+    if (!can('payroll')) throw new Error('مفيش صلاحية');
+    return payroll(q.month, q.branch, u);
+  }
+  if (q.action === 'importAttendance') {
+    if (!can('attendance')) throw new Error('مفيش صلاحية');
+    const lk = LockService.getScriptLock(); lk.waitLock(30000);
+    try { return importAttendance(q, u); } finally { lk.releaseLock(); }
+  }
   if (q.action === 'seedDemo' || q.action === 'clearDemo') { // للمدير فقط: تعبئة/مسح البيانات التجريبية من الموقع
     if (!u.perms.includes('*')) throw new Error('للمدير فقط');
     const lk = LockService.getScriptLock(); lk.waitLock(30000);
@@ -111,7 +130,8 @@ function handle(q) {
 
   if (q.action === 'list') {
     let r = rows(n);
-    if ((n === 'Patients' || n === 'Appointments') && !can(PERM[n])) throw new Error('مفيش صلاحية');
+    if (['Patients', 'Appointments', 'Attendance', 'Adjustments', 'Settings'].includes(n) && !can(PERM[n])) throw new Error('مفيش صلاحية');
+    if (n === 'Attendance' && q.month) r = r.filter(x => String(x.date).startsWith(q.month));
     if (n === 'Employees' && !can('employees')) r = r.map(x => ({ id: x.id, name: x.name, role: x.role, branch: x.branch }));
     if (BRN.includes(n) && !u.all) r = r.filter(x => x.branch === u.branch);
     if (n === 'Procedures' && !can('costs')) r = r.map(x => { COSTS.forEach(k => delete x[k]); return x; });
@@ -125,6 +145,12 @@ function handle(q) {
     if (q.action === 'save') {
       const o = q.row;
       if (!o.id) o.id = Utilities.getUuid().slice(0, 8);
+      if (n === 'Attendance') { // يكمّل الكود والمدة ويثبّت رقم السجل
+        const e = rows('Employees').find(x => x.name === o.employee);
+        if (!e || e.fingerprintId === '') throw new Error('الموظف غير موجود أو ملوش كود بصمة');
+        o.fpId = e.fingerprintId; o.id = o.fpId + '|' + o.date + '|' + o.branch;
+        o.minutes = o.timeOut ? Math.max(0, toMin(o.timeOut) - toMin(o.timeIn)) : 0;
+      }
       if (n === 'Procedures' && !can('costs')) { // اللي مالوش صلاحية ما يمسحش التكاليف
         const old = rows(n).find(x => String(x.id) === String(o.id)) || {};
         COSTS.forEach(k => { o[k] = old[k] === undefined ? '' : old[k]; });
@@ -190,7 +216,7 @@ function bulk(n, objs) {
 }
 
 function clearDemoData() {
-  ['Rooms', 'Employees', 'Schedules', 'Patients', 'Appointments', 'Procedures', 'Users'].forEach(n => {
+  ['Rooms', 'Employees', 'Schedules', 'Patients', 'Appointments', 'Procedures', 'Attendance', 'Adjustments', 'Users'].forEach(n => {
     const s = ss().getSheetByName(n); if (!s) return;
     const v = s.getDataRange().getValues();
     const keep = v.slice(1).filter(r => !String(r[0]).startsWith(n === 'Users' ? 'demo_' : 'D-'));
@@ -222,7 +248,7 @@ function seedDemoData() {
   const add = (name, role, branch, base, hr, com) => {
     k++;
     const o = { id: 'D-E' + k, name, role, branch, fingerprintId: String(100 + k), baseSalary: base, hourlyRate: hr,
-      commissionPct: com, phone: '010' + digits(8), status: 'نشط', username: '' };
+      commissionPct: com, phone: '010' + digits(8), status: 'نشط', username: '', shiftStart: '09:00', shiftEnd: '17:00', weeklyOff: 'الجمعة' };
     emp.push(o); return o;
   };
   const docs = ['د. أحمد سمير', 'د. منى عادل', 'د. محمد حسن', 'د. ياسمين فؤاد', 'د. كريم عبد الله', 'د. سارة مجدي',
@@ -288,5 +314,96 @@ function seedDemoData() {
     });
   }
   bulk('Appointments', appts);
+
+  // حضور وانصراف: الشهر اللي فات والشهر ده لحد النهارده (تأخير وغياب وإضافي عشوائي)
+  const att = [];
+  [-1, 0].forEach(mo => {
+    const last = mo === 0 ? today : new Date(today.getFullYear(), today.getMonth(), 0);
+    for (let d = new Date(today.getFullYear(), today.getMonth() + mo, 1); d <= last; d.setDate(d.getDate() + 1)) {
+      if (DAYS[d.getDay()] === 'الجمعة') continue;
+      emp.forEach(e => {
+        if (Math.random() < 0.07) return; // غياب
+        const tin = 540 + (Math.random() < 0.25 ? 20 + Math.floor(Math.random() * 40) : Math.floor(Math.random() * 12));
+        const tout = 1020 + rnd([-20, 0, 0, 10, 45, 90]);
+        att.push({ id: 'D-' + e.fingerprintId + '|' + ymd(d) + '|' + e.branch, fpId: e.fingerprintId, employee: e.name, branch: e.branch,
+          date: ymd(d), timeIn: hm(tin), timeOut: hm(tout), minutes: tout - tin });
+      });
+    }
+  });
+  bulk('Attendance', att);
+  const mon = ymd(today).slice(0, 7);
+  bulk('Adjustments', [{ id: 'D-J1', employee: rec[0].name, month: mon, type: 'مكافأة', amount: 500, note: 'مكافأة تميز' },
+    { id: 'D-J2', employee: docs[2].name, month: mon, type: 'سلفة', amount: 1000, note: 'سلفة' },
+    { id: 'D-J3', employee: rec[1].name, month: mon, type: 'خصم', amount: 200, note: 'جزاء' }]);
   Logger.log('تم: %s موظف، %s جدول، %s مريض، %s ميعاد', emp.length, sch.length, pats.length, appts.length);
+}
+
+// ===================== الحضور والمرتبات =====================
+function settings() {
+  const o = {};
+  rows('Settings').forEach(r => { if (r.value !== '' && !isNaN(Number(r.value))) o[r.id] = Number(r.value); });
+  return Object.assign({ graceMin: 15, otGraceMin: 30, daysPerMonth: 30, lateMultiplier: 1, absenceMultiplier: 1, overtimeMultiplier: 1.5 }, o);
+}
+
+// الملف بيتجمّع في المتصفح: كل يوم لكل موظف = أول بصمة وآخر بصمة. هنا بنربطه بالموظف حسب كود البصمة ونحفظه.
+function importAttendance(q, u) {
+  if (!u.all && q.branch !== u.branch) throw new Error('تقدر ترفع حضور فرعك بس');
+  const byFp = {};
+  rows('Employees').forEach(e => { if (e.fingerprintId !== '') byFp[String(e.fingerprintId).trim()] = e; });
+  const s = ss().getSheetByName('Attendance'), idx = {};
+  s.getDataRange().getValues().forEach((r, i) => { if (i) idx[r[0]] = i + 1; });
+  const add = [], unknown = {}; let upd = 0;
+  q.days.forEach(d => {
+    const e = byFp[String(d.fp).trim()];
+    if (!e) { unknown[d.fp] = 1; return; }
+    const tout = d.tout && toMin(d.tout) - toMin(d.tin) >= 30 ? d.tout : ''; // بصمة واحدة = انصراف ناقص
+    const id = e.fingerprintId + '|' + d.date + '|' + q.branch;
+    const row = [id, e.fingerprintId, e.name, q.branch, d.date, d.tin, tout, tout ? toMin(tout) - toMin(d.tin) : 0];
+    if (idx[id]) { s.getRange(idx[id], 1, 1, 8).setValues([row]); upd++; } else add.push(row);
+  });
+  if (add.length) s.getRange(s.getLastRow() + 1, 1, add.length, 8).setValues(add);
+  return { added: add.length, updated: upd, unknown: Object.keys(unknown) };
+}
+
+function payroll(month, branch, u) {
+  const S = settings(), Y = Number(month.slice(0, 4)), M = Number(month.slice(5, 7));
+  const dim = new Date(Y, M, 0).getDate(), today = ymd(new Date());
+  const att = rows('Attendance').filter(a => String(a.date).startsWith(month));
+  const adj = rows('Adjustments').filter(a => a.month === month);
+  const price = {}; rows('Procedures').forEach(p => { price[p.name] = Number(p.price) || 0; });
+  const done = rows('Appointments').filter(a => String(a.date).startsWith(month) && a.status === 'اتعمل');
+  return rows('Employees').filter(e => e.status !== 'موقوف' && (!branch || e.branch === branch) && (u.all || e.branch === u.branch)).map(e => {
+    const base = Number(e.baseSalary) || 0, hr = Number(e.hourlyRate) || 0, com = Number(e.commissionPct) || 0;
+    const s0 = e.shiftStart || '09:00', s1 = e.shiftEnd || '17:00', off = e.weeklyOff || 'الجمعة';
+    const shiftMin = Math.max(0, toMin(s1) - toMin(s0)), days = {};
+    att.filter(a => e.fingerprintId !== '' && String(a.fpId) === String(e.fingerprintId)).forEach(a => {
+      const d = days[a.date] = days[a.date] || { tin: '', tout: '', min: 0 };
+      if (!d.tin || a.timeIn < d.tin) d.tin = a.timeIn;
+      if (a.timeOut && a.timeOut > d.tout) d.tout = a.timeOut;
+      d.min += Number(a.minutes) || 0;
+    });
+    let worked = 0, absent = 0, late = 0, ot = 0, mins = 0;
+    Object.keys(days).forEach(k => { mins += days[k].min; });
+    for (let d = 1; d <= dim; d++) {
+      const ds = month + '-' + pad(d);
+      if (DAYS[new Date(Y, M - 1, d).getDay()] === off || ds > today) continue;
+      const x = days[ds];
+      if (!x) { absent++; continue; }
+      worked++;
+      late += Math.max(0, toMin(x.tin) - toMin(s0) - S.graceMin);
+      if (x.tout) ot += Math.max(0, toMin(x.tout) - toMin(s1) - S.otGraceMin);
+    }
+    const monthly = base > 0, daily = base / S.daysPerMonth, perMin = shiftMin ? daily / shiftMin : 0;
+    const salary = monthly ? base : mins / 60 * hr;                       // اللي أساسيه صفر بيتحاسب بالساعة
+    const lateDed = monthly ? late * perMin * S.lateMultiplier : 0;
+    const absDed = monthly ? absent * daily * S.absenceMultiplier : 0;
+    const otPay = monthly ? ot / 60 * (hr || (shiftMin ? daily / (shiftMin / 60) : 0)) * S.overtimeMultiplier : 0;
+    const commission = com ? done.filter(a => a.doctor === e.name).reduce((t, a) => t + (price[a.procedure] || 0), 0) * com / 100 : 0;
+    let bonus = 0, adjDed = 0;
+    adj.filter(a => a.employee === e.name).forEach(a => { if (a.type === 'مكافأة') bonus += Number(a.amount) || 0; else adjDed += Number(a.amount) || 0; });
+    const r = Math.round;
+    return { id: e.id, name: e.name, role: e.role, branch: e.branch, base, days: worked, absent, lateMin: late, otMin: ot, hours: Math.round(mins / 6) / 10,
+      salary: r(salary), otPay: r(otPay), commission: r(commission), bonus: r(bonus), lateDed: r(lateDed), absDed: r(absDed), adjDed: r(adjDed),
+      net: r(salary + otPay + commission + bonus - lateDed - absDed - adjDed) };
+  });
 }
