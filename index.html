@@ -97,6 +97,23 @@ dialog::backdrop{background:#0008}
 .tools{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
 .tools label{margin:0;min-width:150px}
 tfoot td{font-weight:600;background:color-mix(in srgb,var(--accent) 8%,transparent)}
+dialog.wide{width:min(900px,96vw);max-height:92vh;overflow:auto}
+.chart{direction:ltr;margin:8px 0 14px}
+.arch{display:flex;justify-content:center;gap:4px;margin-bottom:8px}
+.arch .gap{width:16px}
+.tooth{width:36px;height:40px;padding:0;border-radius:8px 8px 14px 14px;font-size:12px}
+.tooth:disabled{opacity:1;cursor:default}
+.tooth.done{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--panel))}
+.tooth.sel{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.alert{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger);padding:8px 12px;border-radius:8px;margin:8px 0;font-size:14px}
+.sec{margin:18px 0 8px;font-weight:600}
+.flex{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.flex label{margin:0}
+.flex input,.flex select{width:auto}
+.rxrow{display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:6px;margin-bottom:6px}
+textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font:inherit;color:inherit;min-height:60px}
+#print{display:none}
+@media print{body.printing>*:not(#print){display:none!important}body.printing #print{display:block;padding:24px;color:#000;background:#fff}}
 .hint{font-size:12px;color:var(--mute);margin:-6px 0 12px}
 </style>
 </head>
@@ -128,6 +145,9 @@ tfoot td{font-weight:600;background:color-mix(in srgb,var(--accent) 8%,transpare
   </div>
 </div>
 
+<div id="print"></div>
+<dialog id="vis" class="wide"><div id="vbody"></div></dialog>
+<dialog id="pf" class="wide"><div id="pbody"></div></dialog>
 <dialog id="imp" style="width:min(520px,94vw)">
   <h3 style="margin-top:0">استيراد حضور من جهاز البصمة</h3>
   <label>الفرع اللي الجهاز فيه<select id="ibr"></select></label>
@@ -156,7 +176,7 @@ const SCHEMA = {
     ['phone', 'التليفون', 'text'], ['status', 'الحالة', 'opt:نشط,موقوف'], ['shiftStart', 'بداية الشيفت (فاضي = 09:00)', 'time'], ['shiftEnd', 'نهاية الشيفت (فاضي = 17:00)', 'time'],
     ['weeklyOff', 'الإجازة الأسبوعية', 'opt:الجمعة,السبت,الأحد,الاثنين,الثلاثاء,الأربعاء,الخميس'], ['username', 'اسم الدخول (اختياري)', 'text']] },
   Roles: { label: 'الأدوار', perm: 'roles', cols: ['name', 'perms', 'scope'], f: [['name', 'اسم الدور', 'text'], ['perms', 'الصلاحيات', 'text'], ['scope', 'نطاق الرؤية', 'opt:فرعه فقط,كل الفروع']],
-    hint: 'افصل بينهم بفاصلة. * = كل الصلاحيات. المتاح: employees, branches, roles, users, schedules, patients, appointments, procedures, attendance, payroll, costs (costs = رؤية أسعار الأدوات والربح)' },
+    hint: 'افصل بينهم بفاصلة. * = كل الصلاحيات. المتاح: employees, branches, roles, users, schedules, patients, appointments, procedures, attendance, payroll, medical, costs (costs = رؤية أسعار الأدوات والربح)' },
   Branches: { label: 'الفروع', perm: 'branches', cols: ['name', 'address'], f: [['name', 'اسم الفرع', 'text'], ['address', 'المحافظة / العنوان', 'text']] },
   Rooms: { label: 'الغرف', perm: 'branches', cols: ['branch', 'name'], f: [['branch', 'الفرع', 'sel:Branches'], ['name', 'اسم / رقم الغرفة', 'text']] },
   Procedures: { label: 'الإجراءات والأسعار', perm: 'procedures', cols: ['name', 'duration', 'price', 'materialsCost', 'markupPct'], f: [
@@ -173,6 +193,7 @@ const SCHEMA = {
     ['patient', 'المريض (اكتب الاسم واختار)', 'pt'], ['branch', 'الفرع', 'sel:Branches'], ['doctor', 'الدكتور', 'doc'], ['room', 'الغرفة', 'rm'],
     ['date', 'التاريخ', 'date'], ['time', 'الوقت', 'time'], ['procedure', 'الإجراء', 'sel:Procedures'], ['duration', 'المدة بالدقائق', 'number'],
     ['status', 'الحالة', 'opt:محجوز,تم الحضور,اتعمل,ملغي']] },
+  Visits: { label: 'الزيارات', perm: 'medical', noAdd: 1, cols: ['date', 'patient', 'doctor', 'branch', 'total', 'cost'], f: [['cost', 'تكلفة الأدوات', 'number', 1]] },
   Attendance: { label: 'الحضور والانصراف', perm: 'attendance', cols: [], f: [['employee', 'الموظف', 'sel:Employees'], ['branch', 'الفرع', 'sel:Branches'],
     ['date', 'التاريخ', 'date'], ['timeIn', 'وقت الحضور', 'time'], ['timeOut', 'وقت الانصراف', 'time']] },
   Payroll: { label: 'كشف المرتبات', perm: 'payroll', cols: [], f: [] },
@@ -183,7 +204,7 @@ const SCHEMA = {
 const HEAD = { scope: 'النطاق', name: 'الاسم', role: 'الدور', branch: 'الفرع', phone: 'التليفون', status: 'الحالة', perms: 'الصلاحيات', address: 'العنوان',
   duration: 'المدة (د)', price: 'السعر', materialsCost: 'سعر الأدوات', markupPct: 'نسبة الربح %', doctor: 'الدكتور', room: 'الغرفة', day: 'اليوم',
   from: 'من', to: 'إلى', validFrom: 'سارية من', validTo: 'سارية لحد', age: 'السن', allergies: 'الحساسية', chronic: 'أمراض مزمنة',
-  employee: 'الموظف', month: 'الشهر', type: 'النوع', amount: 'المبلغ', note: 'ملاحظة', label: 'الإعداد', value: 'القيمة',
+  total: 'الإجمالي', cost: 'تكلفة الأدوات', employee: 'الموظف', month: 'الشهر', type: 'النوع', amount: 'المبلغ', note: 'ملاحظة', label: 'الإعداد', value: 'القيمة',
   source: 'المصدر', date: 'التاريخ', time: 'الوقت', patient: 'المريض', procedure: 'الإجراء' };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -220,6 +241,7 @@ const IC = {
   seed: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
   unseed: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   out: '<path d="M9 21H5V3h4M16 17l5-5-5-5M21 12H9"/>',
+  Visits: '<path d="M6 3v6a4 4 0 0 0 8 0V3M10 13v3a4 4 0 0 0 8 0v-1"/><circle cx="18" cy="12" r="2"/>',
   Attendance: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   Payroll: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v.01M18 14v.01"/>',
   Adjustments: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 6v6M9 9h6M9 17h6"/>',
@@ -252,6 +274,7 @@ async function load(t) { D[t] = await api({ action: 'list', table: t }); return 
 
 async function show(t) {
   tab = t; const S = { ...SCHEMA[t] }; $('q').value = '';
+  const extra = r => t === 'Appointments' && can('medical') ? `<button class="link" data-v="${esc(r.id)}">زيارة</button>` : t === 'Patients' && can('medical') ? `<button class="link" data-p="${esc(r.id)}">الملف</button>` : '';
   S.cols = S.cols.filter(c => { const f = SCHEMA[t].f.find(x => x[0] === c); return !(f && f[3] && !can('costs')); });
   document.querySelectorAll('nav button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === t));
   $('add').textContent = 'إضافة'; $('q').style.display = ''; $('tbl').className = 'wrap';
@@ -265,7 +288,7 @@ async function show(t) {
     if (!rows.length) { $('tbl').innerHTML = `<div class="empty">مفيش بيانات في ${S.label} لسه. دوس "إضافة" لتبدأ.</div>`; return; }
     $('tbl').innerHTML = '<table><thead><tr>' + S.cols.map(c => `<th>${HEAD[c] || c}</th>`).join('') + '<th></th></tr></thead><tbody>' +
       rows.map(r => '<tr>' + S.cols.map(c => `<td>${esc(r[c])}</td>`).join('') +
-        `<td>${can(S.perm) ? `<button class="link" data-e="${esc(r.id)}">تعديل</button>${S.noDel ? '' : `<button class="link del" data-d="${esc(r.id)}">حذف</button>`}` : ''}</td></tr>`).join('') +
+        `<td>${extra(r)}${can(S.perm) ? `<button class="link" data-e="${esc(r.id)}">تعديل</button>${S.noDel ? '' : `<button class="link del" data-d="${esc(r.id)}">حذف</button>`}` : ''}</td></tr>`).join('') +
       '</tbody></table>';
   } catch (e) { $('tbl').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
@@ -276,6 +299,128 @@ const money = n => Number(n || 0).toLocaleString('en-US');
 let attMonth = nowM(), attBranch = '', payMonth = nowM(), payBranch = '', payRows = [], impRows = [], impDays = [];
 const branchOpts = sel => (D.Branches || []).filter(b => session.user.all || !session.user.branch || b.name === session.user.branch)
   .map(b => `<option ${b.name === sel ? 'selected' : ''}>${esc(b.name)}</option>`).join('');
+
+// ---- الزيارة: خريطة الأسنان + الإجراءات + الوصفة + الأشعة ----
+let V = null, P = null;
+const R = (a, b) => Array.from({ length: Math.abs(b - a) + 1 }, (_, i) => a + (b >= a ? i : -i));
+const chartHtml = (sel, hist, ro) => {
+  const t = n => `<button type="button" class="tooth ${sel.includes(String(n)) ? 'sel' : ''} ${hist[n] ? 'done' : ''}" ${ro ? 'disabled' : `data-t="${n}"`} title="${esc((hist[n] || []).join('، '))}">${n}</button>`;
+  const row = (a, b) => `<div class="arch">${a.map(t).join('')}<span class="gap"></span>${b.map(t).join('')}</div>`;
+  return `<div class="chart">${row(R(18, 11), R(21, 28))}${row(R(48, 41), R(31, 38))}</div>`;
+};
+const histOf = vs => {
+  const h = {};
+  vs.forEach(v => { try { JSON.parse(v.items || '[]').forEach(i => { if (i.tooth) (h[i.tooth] = h[i.tooth] || []).push(i.proc + ' (' + v.date + ')'); }); } catch (e) {} });
+  return h;
+};
+const costOf = items => items.reduce((s, i) => s + (+((D.Procedures.find(p => p.name === i.proc) || {}).materialsCost) || 0) * (+i.qty || 1), 0);
+const totOf = items => items.reduce((s, i) => s + (+i.price || 0) * (+i.qty || 1), 0);
+const sumHtml = () => `الإجمالي: ${money(totOf(V.items))} جنيه` + (can('costs') ? ` <span class="hint">— تكلفة الأدوات ${money(costOf(V.items))} / الربح ${money(totOf(V.items) - costOf(V.items))}</span>` : '');
+const filesHtml = (list, delAttr) => (list.length ? list.map(f => `<button type="button" class="link" data-f="${esc(f.driveId)}">${esc(f.name)} (${esc(f.date)})</button><button type="button" class="link del" data-fx="${esc(f.id)}">حذف</button>`).join('<br>') : '<span class="hint">مفيش ملفات.</span>');
+
+async function openVisit(v) {
+  v = v || {};
+  await Promise.all([!D.Patients && load('Patients'), !D.Procedures && load('Procedures'), !D.Employees && load('Employees'), !D.Branches && load('Branches')]);
+  const a = v.appt && typeof v.appt === 'object' ? v.appt : null, pkey = a ? a.patient : v.patient;
+  const prior = await api({ action: 'list', table: 'Visits', patient: pkey });
+  const ex = a ? prior.find(x => String(x.appt) === String(a.id)) : null;
+  if (ex) v = ex;
+  const src = ex || !a ? v : a, pr = a && !ex ? (D.Procedures.find(p => p.name === a.procedure) || {}) : null;
+  V = { id: v.id || 'V' + Date.now().toString(36), appt: ex || !a ? (v.appt || '') : a.id, patient: pkey, doctor: src.doctor, branch: src.branch, date: src.date,
+    diagnosis: v.diagnosis || '', notes: v.notes || '', items: v.items ? JSON.parse(v.items) : (pr ? [{ proc: pr.name, tooth: '', qty: 1, price: pr.price }] : []),
+    rx: v.rx ? JSON.parse(v.rx) : [], sel: [], hist: histOf(prior.filter(x => x.id !== v.id)), files: await api({ action: 'list', table: 'Files', patient: pkey }) };
+  renderVisit(); $('vis').showModal();
+}
+function renderVisit() {
+  const pt = D.Patients.find(p => p.name + ' - ' + p.phone === V.patient) || {}, pro = D.Procedures;
+  const docs = D.Employees.filter(e => String(e.role).split(',').includes('دكتور'));
+  $('vbody').innerHTML = `<h3 style="margin:0 0 4px">زيارة: ${esc(V.patient)}</h3>` +
+    (pt.allergies || pt.chronic ? `<div class="alert">تنبيه: ${pt.allergies ? 'حساسية ' + esc(pt.allergies) : ''}${pt.allergies && pt.chronic ? ' | ' : ''}${pt.chronic ? 'أمراض مزمنة ' + esc(pt.chronic) : ''}</div>` : '') +
+    `<div class="flex"><label>التاريخ<input type="date" id="vdate" value="${esc(V.date)}"></label><label>الدكتور<select id="vdoc">${docs.map(d => `<option ${d.name === V.doctor ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label><span class="hint">الفرع: ${esc(V.branch)}</span></div>` +
+    `<div class="sec">خريطة الأسنان <span class="hint">(الأسنان الملوّنة اتعالجت قبل كده. اختار سن أو أكتر وبعدين الإجراء)</span></div>${chartHtml(V.sel, V.hist)}` +
+    `<div class="flex"><label>الإجراء<select id="vproc">${pro.map(p => `<option>${esc(p.name)}</option>`).join('')}</select></label><label>العدد<input type="number" id="vqty" value="1" min="1" style="width:70px"></label><label>السعر<input type="number" id="vprice" style="width:110px" value="${pro[0] ? esc(pro[0].price) : ''}"></label><button type="button" class="primary" id="vadd">إضافة للزيارة</button></div>` +
+    (V.items.length ? `<div class="wrap" style="margin-top:10px"><table><thead><tr><th>الإجراء</th><th>السن</th><th>العدد</th><th>السعر</th><th></th></tr></thead><tbody>${V.items.map((i, k) => `<tr><td>${esc(i.proc)}</td><td>${esc(i.tooth) || '—'}</td><td>${esc(i.qty)}</td><td><input class="vp" data-i="${k}" type="number" value="${esc(i.price)}" style="width:100px"></td><td><button type="button" class="link del" data-x="${k}">حذف</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="hint" style="margin-top:8px">لسه ما اتضافش إجراءات.</div>') +
+    `<div class="sec" id="vsum">${sumHtml()}</div>` +
+    `<div class="sec">التشخيص</div><textarea id="vdiag">${esc(V.diagnosis)}</textarea><div class="sec">ملاحظات</div><textarea id="vnotes">${esc(V.notes)}</textarea>` +
+    `<div class="sec">الوصفة الطبية</div>${V.rx.map((r, i) => `<div class="rxrow"><input data-r="${i}.drug" placeholder="الدواء" value="${esc(r.drug)}"><input data-r="${i}.dose" placeholder="الجرعة" value="${esc(r.dose)}"><input data-r="${i}.days" placeholder="المدة" value="${esc(r.days)}"><button type="button" class="link del" data-rx="${i}">حذف</button></div>`).join('')}` +
+    `<div class="flex"><button type="button" id="rxadd">إضافة دواء</button>${V.rx.length ? '<button type="button" id="rxprint">طباعة الوصفة</button>' : ''}</div>` +
+    `<div class="sec">الأشعة والملفات <span class="hint">(صور أو PDF، بتتحفظ على Google Drive)</span></div><div>${filesHtml(V.files)}</div><label style="margin-top:8px">رفع ملف<input type="file" id="vfile" accept="image/*,.pdf"></label>` +
+    `<div class="err" id="verr"></div><div class="row"><button class="primary" id="vsave">حفظ الزيارة</button><button id="vclose">إغلاق</button></div>`;
+}
+const shrink = file => new Promise(res => { const img = new Image(); img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = img.width * k; c.height = img.height * k; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); c.toBlob(res, 'image/jpeg', .82); }; img.src = URL.createObjectURL(file); });
+async function uploadFor(file, patient, visit) {
+  let blob = file, mime = file.type, name = file.name;
+  if (file.type.startsWith('image/')) { blob = await shrink(file); mime = 'image/jpeg'; name = name.replace(/\.\w+$/, '') + '.jpg'; }
+  else if (file.size > 4e6) throw new Error('الملف كبير (أقصى 4 ميجا)');
+  const data = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
+  return api({ action: 'uploadFile', patient, visit, name, mime, data });
+}
+async function openFile(driveId) {
+  try {
+    const r = await api({ action: 'getFile', driveId });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([Uint8Array.from(atob(r.data), c => c.charCodeAt(0))], { type: r.mime })); a.target = '_blank'; a.click();
+  } catch (e) { alert(e.message); }
+}
+async function delFile(id) {
+  if (!confirm('تحذف الملف؟')) return;
+  try { await api({ action: 'remove', table: 'Files', id }); [V, P].forEach(x => { if (x) x.files = x.files.filter(f => f.id !== id); }); if ($('vis').open) renderVisit(); if ($('pf').open) renderPatient(); } catch (e) { alert(e.message); }
+}
+function printRx() {
+  const pt = D.Patients.find(p => p.name + ' - ' + p.phone === V.patient) || {};
+  $('print').innerHTML = `<div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #2b6a99;padding-bottom:10px"><img src="logo.png" style="width:60px"><div><b style="font-size:24px;color:#2b6a99;letter-spacing:.12em">dental</b><div>العيادات — فرع ${esc(V.branch)}</div></div></div>` +
+    `<p>المريض: <b>${esc(pt.name || V.patient)}</b> ${pt.age ? ' — السن: ' + esc(pt.age) : ''}<br>التاريخ: ${esc(V.date)} — الدكتور: ${esc(V.doctor)}</p><h2 style="direction:ltr;text-align:left">Rx</h2>` +
+    `<ol>${V.rx.filter(r => r.drug).map(r => `<li style="margin-bottom:10px"><b>${esc(r.drug)}</b> — ${esc(r.dose)} ${r.days ? '— لمدة ' + esc(r.days) : ''}</li>`).join('')}</ol>`;
+  document.body.classList.add('printing'); window.print(); setTimeout(() => document.body.classList.remove('printing'), 500);
+}
+async function saveVisit() {
+  const o = { id: V.id, appt: V.appt, patient: V.patient, doctor: V.doctor, branch: V.branch, date: V.date, diagnosis: V.diagnosis, notes: V.notes, items: JSON.stringify(V.items), rx: JSON.stringify(V.rx.filter(r => r.drug)) };
+  try { await api({ action: 'save', table: 'Visits', row: o }); $('vis').close(); delete D.Visits; delete D.Appointments; show(tab); } catch (e) { $('verr').textContent = e.message; }
+}
+$('vbody').oninput = e => {
+  const t = e.target;
+  if (t.id === 'vdiag') V.diagnosis = t.value; else if (t.id === 'vnotes') V.notes = t.value;
+  else if (t.classList.contains('vp')) { V.items[+t.dataset.i].price = t.value; $('vsum').innerHTML = sumHtml(); }
+  else if (t.dataset.r) { const [i, k] = t.dataset.r.split('.'); V.rx[+i][k] = t.value; }
+};
+$('vbody').onchange = async e => {
+  const t = e.target;
+  if (t.id === 'vdate') V.date = t.value; else if (t.id === 'vdoc') V.doctor = t.value;
+  else if (t.id === 'vproc') { const p = D.Procedures.find(x => x.name === t.value); $('vprice').value = p ? p.price : ''; }
+  else if (t.id === 'vfile' && t.files[0]) { try { $('verr').textContent = 'جاري الرفع…'; V.files.push(await uploadFor(t.files[0], V.patient, V.id)); renderVisit(); } catch (x) { $('verr').textContent = x.message; } }
+};
+$('vbody').onclick = e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.t) { const i = V.sel.indexOf(t.dataset.t); if (i < 0) V.sel.push(t.dataset.t); else V.sel.splice(i, 1); renderVisit(); }
+  else if (t.id === 'vadd') { const proc = $('vproc').value, qty = +$('vqty').value || 1, price = $('vprice').value; (V.sel.length ? V.sel : ['']).forEach(tooth => V.items.push({ proc, tooth, qty, price })); V.sel = []; renderVisit(); }
+  else if (t.dataset.x) { V.items.splice(+t.dataset.x, 1); renderVisit(); }
+  else if (t.id === 'rxadd') { V.rx.push({ drug: '', dose: '', days: '' }); renderVisit(); }
+  else if (t.dataset.rx) { V.rx.splice(+t.dataset.rx, 1); renderVisit(); }
+  else if (t.id === 'rxprint') printRx();
+  else if (t.dataset.f) openFile(t.dataset.f); else if (t.dataset.fx) delFile(t.dataset.fx);
+  else if (t.id === 'vsave') saveVisit(); else if (t.id === 'vclose') $('vis').close();
+};
+
+// ---- ملف المريض ----
+async function openPatient(pt) {
+  if (!D.Procedures) await load('Procedures');
+  const key = pt.name + ' - ' + pt.phone;
+  P = { pt, key, visits: await api({ action: 'list', table: 'Visits', patient: key }), files: await api({ action: 'list', table: 'Files', patient: key }) };
+  renderPatient(); $('pf').showModal();
+}
+function renderPatient() {
+  const { pt, visits, files } = P, cst = can('costs');
+  const sorted = visits.slice().sort((a, b) => a.date < b.date ? 1 : -1);
+  $('pbody').innerHTML = `<h3 style="margin:0 0 4px">${esc(pt.name)}</h3><div class="hint">تليفون ${esc(pt.phone)} — سن ${esc(pt.age)} — عرف العيادة من: ${esc(pt.source) || '—'}</div>` +
+    (pt.allergies || pt.chronic ? `<div class="alert">تنبيه: ${pt.allergies ? 'حساسية ' + esc(pt.allergies) : ''}${pt.allergies && pt.chronic ? ' | ' : ''}${pt.chronic ? 'أمراض مزمنة ' + esc(pt.chronic) : ''}</div>` : '') +
+    `<div class="sec">الأسنان اللي اتعالجت</div>${chartHtml([], histOf(visits), true)}<div class="sec">الزيارات (${visits.length})</div>` +
+    (sorted.length ? `<div class="wrap"><table><thead><tr><th>التاريخ</th><th>الدكتور</th><th>الإجراءات</th><th>الإجمالي</th>${cst ? '<th>تكلفة الأدوات</th>' : ''}</tr></thead><tbody>${sorted.map(v => { let it = []; try { it = JSON.parse(v.items || '[]'); } catch (e) {} return `<tr><td>${esc(v.date)}</td><td>${esc(v.doctor)}</td><td>${esc(it.map(i => i.proc + (i.tooth ? ' (' + i.tooth + ')' : '')).join('، '))}</td><td>${money(v.total)}</td>${cst ? `<td>${money(v.cost)}</td>` : ''}</tr>`; }).join('')}</tbody></table></div>` : '<div class="hint">مفيش زيارات لسه.</div>') +
+    `<div class="sec">الأشعة والملفات</div><div>${filesHtml(files)}</div><label style="margin-top:8px">رفع ملف<input type="file" id="pfile" accept="image/*,.pdf"></label><div class="err" id="perr"></div><div class="row"><button id="pclose">إغلاق</button></div>`;
+}
+$('pbody').onclick = e => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.f) openFile(t.dataset.f); else if (t.dataset.fx) delFile(t.dataset.fx); else if (t.id === 'pclose') $('pf').close(); };
+$('pbody').onchange = async e => {
+  if (e.target.id !== 'pfile' || !e.target.files[0]) return;
+  try { $('perr').textContent = 'جاري الرفع…'; P.files.push(await uploadFor(e.target.files[0], P.key, '')); renderPatient(); } catch (x) { $('perr').textContent = x.message; }
+};
 
 async function showAttendance() {
   $('tbl').className = ''; $('q').style.display = ''; $('title').textContent = 'الحضور والانصراف';
@@ -469,6 +614,10 @@ $('tbl').onclick = async e => {
     try { payRows = await api({ action: 'payroll', month: payMonth, branch: payBranch }); } catch (x) { alert(x.message); }
     return showPayroll();
   }
+  const bv = e.target.dataset.v, bp = e.target.dataset.p;
+  if (bv) return openVisit({ appt: D.Appointments.find(r => String(r.id) === bv) });
+  if (bp) return openPatient(D.Patients.find(r => String(r.id) === bp));
+  if (tab === 'Visits' && e.target.dataset.e) return openVisit(D.Visits.find(r => String(r.id) === e.target.dataset.e));
   const tl = e.target.closest('.tile');
   if (tl) { roomBranch = tl.dataset.b; return show('Rooms'); }
   if (e.target.id === 'rback') { roomBranch = null; return show('Rooms'); }
